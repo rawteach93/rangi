@@ -1,0 +1,2477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0E0F12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Rangi — a universal Bluetooth colour controller for RGB and RGBIC lights.">
+<title>Rangi — Universal Colour Controller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Rangi — control surface
+   Chassis is neutral. The only saturated colour on screen is
+   the one being sent to the lights, exposed as --live.
+   ============================================================ */
+:root{
+  --ink:#0E0F12;
+  --chassis:#15171C;
+  --rail:#1C1F26;
+  --raise:#242831;
+  --hairline:#2E333D;
+  --hairline-soft:#23272F;
+  --text:#E9EBF0;
+  --muted:#868C9A;
+  --dim:#5B616E;
+  --live:#FF5A2D;
+  --live-soft:rgba(255,90,45,.18);
+  --ok:#5BD08A;
+  --warn:#E8B44A;
+  --bad:#E2615B;
+  --r-sm:7px;
+  --r-md:12px;
+  --r-lg:20px;
+  --pad:16px;
+  --sat:1;
+  --tap:44px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden}
+body{
+  background:var(--ink);
+  color:var(--text);
+  font-family:Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px;line-height:1.45;
+  font-variant-numeric:tabular-nums;
+  overscroll-behavior:none;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+button{background:none;border:0;cursor:pointer;padding:0}
+h1,h2,h3,p{margin:0}
+::selection{background:var(--live);color:#06070A}
+:focus-visible{outline:2px solid var(--live);outline-offset:2px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* ---------- shell ---------- */
+/* flex, not grid: the banner and the mobile nav come and go, and fixed
+   grid tracks shift under them — the panel ends up squeezed */
+.app{
+  display:flex;flex-direction:column;height:100dvh;
+  padding-top:env(safe-area-inset-top);
+}
+.topbar{
+  display:flex;align-items:center;gap:14px;flex:0 0 auto;
+  padding:10px 16px;border-bottom:1px solid var(--hairline-soft);
+  background:var(--chassis);
+}
+.brand{display:flex;align-items:baseline;gap:9px;margin-right:2px}
+.brand b{font-weight:700;font-size:19px;letter-spacing:-.025em}
+.brand span{font-size:11.5px;color:var(--dim);letter-spacing:.01em}
+.topdev{display:flex;gap:7px;overflow-x:auto;flex:1;scrollbar-width:none;padding:2px 0}
+.topdev::-webkit-scrollbar{display:none}
+.chip{
+  display:flex;align-items:center;gap:7px;flex:0 0 auto;
+  padding:6px 12px 6px 9px;border-radius:999px;
+  background:var(--rail);border:1px solid var(--hairline-soft);
+  font-size:13px;color:var(--muted);white-space:nowrap;transition:.14s;
+}
+.chip:hover{border-color:var(--hairline)}
+.chip.on{color:var(--text);border-color:var(--live);background:var(--live-soft)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+.chip.live .dot{background:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+.chip.sim .dot{background:var(--warn)}
+.iconbtn{
+  width:34px;height:34px;border-radius:var(--r-sm);display:grid;place-items:center;
+  color:var(--muted);border:1px solid transparent;transition:.14s;flex:0 0 auto;
+}
+.iconbtn:hover{background:var(--rail);color:var(--text)}
+.iconbtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- body grid ---------- */
+.main{display:grid;grid-template-columns:232px minmax(0,1fr) 348px;flex:1 1 auto;min-height:0}
+.rail,.panel{background:var(--chassis);min-height:0;overscroll-behavior:contain}
+.rail{border-right:1px solid var(--hairline-soft);padding:14px 12px 24px;overflow-y:auto}
+.panel{border-left:1px solid var(--hairline-soft);display:flex;flex-direction:column;overflow:hidden}
+.stage{
+  position:relative;min-height:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;padding:20px;overflow:hidden;
+}
+
+/* ---------- rail ---------- */
+.railhead{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 10px}
+.railhead h3{font-size:12.5px;color:var(--dim);font-weight:500}
+.devcard{
+  width:100%;text-align:left;padding:11px 12px;border-radius:var(--r-md);
+  background:var(--rail);border:1px solid var(--hairline-soft);margin-bottom:8px;
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;transition:.14s;
+}
+.devcard:hover{border-color:var(--hairline)}
+.devcard.on{border-color:var(--live);background:linear-gradient(var(--live-soft),var(--live-soft)) ,var(--rail)}
+.devcard .swatch{width:22px;height:22px;border-radius:6px;background:var(--dim);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.devcard .nm{font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devcard .sub{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devcard .st{width:7px;height:7px;border-radius:50%;background:var(--bad)}
+.devcard.conn .st{background:var(--ok)}
+.devcard.simu .st{background:var(--warn)}
+.addbtn{
+  width:100%;padding:11px;border-radius:var(--r-md);border:1px dashed var(--hairline);
+  color:var(--muted);font-size:13.5px;transition:.14s;
+}
+.addbtn:hover{border-color:var(--live);color:var(--text);background:var(--live-soft)}
+.railsec{margin-top:22px}
+
+/* ---------- stage: wheel ---------- */
+.glow{
+  position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(42% 42% at 50% 44%,var(--live) 0%,transparent 72%);
+  opacity:.17;filter:blur(36px);transition:opacity .3s;
+}
+.wheelwrap{position:relative;width:min(58vh,330px);aspect-ratio:1;flex:0 0 auto;touch-action:none}
+.wheelwrap canvas{width:100%;height:100%;display:block;border-radius:50%;
+  box-shadow:0 0 0 1px var(--hairline),0 18px 50px -22px #000}
+.knob{
+  position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
+  border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.65),inset 0 0 0 1px rgba(0,0,0,.3);
+  pointer-events:none;transition:transform .06s;
+}
+.hub{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:38%;aspect-ratio:1;border-radius:50%;background:var(--ink);
+  box-shadow:inset 0 0 0 1px var(--hairline);
+  display:grid;place-items:center;text-align:center;pointer-events:none;overflow:hidden;
+}
+.hub .hex{font-size:clamp(14px,3.1vh,20px);font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+.readout{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center}
+.pill{
+  display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
+  background:var(--rail);border:1px solid var(--hairline-soft);font-size:12px;color:var(--muted);
+}
+.pill b{color:var(--text);font-weight:600}
+.cct{width:min(100%,430px);flex:0 0 auto}
+.cctbar{
+  height:30px;border-radius:999px;position:relative;cursor:pointer;touch-action:none;
+  background:linear-gradient(90deg,#FF9B42,#FFC489,#FFE4CE,#FFFFFF,#DCE9FF,#B4CEFF,#9FC0FF);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);
+}
+.cctknob{position:absolute;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+  border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none}
+.simstrip{
+  width:min(100%,560px);height:46px;border-radius:var(--r-md);overflow:hidden;
+  display:flex;gap:2px;padding:4px;background:#07080B;box-shadow:inset 0 0 0 1px var(--hairline);flex:0 0 auto;
+}
+.simstrip i{flex:1;border-radius:3px;background:#111;transition:background .07s linear}
+
+/* ---------- panel ---------- */
+.tabs{display:flex;gap:2px;padding:10px 10px 0;border-bottom:1px solid var(--hairline-soft);
+  overflow-x:auto;scrollbar-width:none;flex:0 0 auto;background:var(--chassis)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  padding:9px 13px;border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:13.5px;color:var(--muted);
+  white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.14s;
+}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-bottom-color:var(--live)}
+.pane{padding:16px;display:none;min-height:0}
+.pane.on{display:block;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.grp{margin-bottom:22px}
+.grp>h4{font-size:12.5px;color:var(--dim);font-weight:500;margin-bottom:9px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+.row label{font-size:13.5px;color:var(--muted)}
+.row .val{font-size:13px;color:var(--text);font-weight:600;min-width:46px;text-align:right}
+
+/* sliders */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:999px;background:var(--raise);box-shadow:inset 0 0 0 1px var(--hairline-soft)}
+input[type=range]::-moz-range-track{height:8px;border-radius:999px;background:var(--raise);box-shadow:inset 0 0 0 1px var(--hairline-soft)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;margin-top:-6px;
+  box-shadow:0 1px 6px rgba(0,0,0,.55);border:0;
+}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 6px rgba(0,0,0,.55)}
+.slide{display:block;margin:-4px 0 10px}
+.slide.grad::-webkit-slider-runnable-track{background:var(--trk,var(--raise))}
+.slide.grad::-moz-range-track{background:var(--trk,var(--raise))}
+
+/* buttons & grids */
+.btn{
+  padding:10px 14px;border-radius:var(--r-sm);background:var(--raise);
+  border:1px solid var(--hairline-soft);font-size:13.5px;color:var(--text);transition:.14s;
+}
+.btn:hover{border-color:var(--hairline)}
+.btn.prim{background:var(--live);border-color:var(--live);color:#07080B;font-weight:600}
+.btn.prim:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--text);background:var(--rail)}
+.btn.danger{color:var(--bad);border-color:rgba(226,97,91,.3)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.tile{
+  padding:10px;border-radius:var(--r-md);background:var(--rail);border:1px solid var(--hairline-soft);
+  text-align:left;transition:.14s;display:grid;gap:7px;
+}
+.tile:hover{border-color:var(--hairline);transform:translateY(-1px)}
+.tile.on{border-color:var(--live);background:linear-gradient(var(--live-soft),var(--live-soft)),var(--rail)}
+.tile .bar{height:26px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.tile .nm{font-size:12px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .sb{font-size:10.5px;color:var(--dim)}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:6px}
+.sw button{aspect-ratio:1;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:.12s}
+.sw button:hover{transform:scale(1.08)}
+.seg{display:flex;background:var(--rail);border-radius:var(--r-sm);padding:3px;gap:3px;border:1px solid var(--hairline-soft)}
+.seg button{flex:1;padding:7px 6px;border-radius:5px;font-size:12.5px;color:var(--muted);transition:.14s}
+.seg button.on{background:var(--raise);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.sw2{display:flex;align-items:center;gap:8px}
+.toggle{width:42px;height:24px;border-radius:999px;background:var(--raise);position:relative;transition:.18s;flex:0 0 auto;box-shadow:inset 0 0 0 1px var(--hairline-soft)}
+.toggle i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--dim);transition:.18s}
+.toggle.on{background:var(--live-soft);box-shadow:inset 0 0 0 1px var(--live)}
+.toggle.on i{left:21px;background:var(--live)}
+.txt{
+  width:100%;padding:10px 12px;border-radius:var(--r-sm);background:var(--ink);
+  border:1px solid var(--hairline-soft);color:var(--text);font-size:13.5px;
+}
+.txt:focus{outline:none;border-color:var(--live)}
+select.txt{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23868C9A' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.note{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:8px}
+.empty{padding:26px 14px;text-align:center;color:var(--dim);font-size:13px;line-height:1.6}
+canvas.viz{width:100%;height:84px;display:block;border-radius:var(--r-md);background:var(--ink);box-shadow:inset 0 0 0 1px var(--hairline-soft)}
+
+/* ---------- master bar ---------- */
+.master{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;flex:0 0 auto;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  background:var(--chassis);border-top:1px solid var(--hairline-soft);
+}
+.power{
+  width:50px;height:50px;border-radius:50%;display:grid;place-items:center;
+  background:var(--raise);border:1px solid var(--hairline);color:var(--muted);transition:.16s;flex:0 0 auto;
+}
+.power svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.power.on{background:var(--live);border-color:var(--live);color:#07080B;box-shadow:0 0 22px -4px var(--live)}
+.mbright{display:grid;gap:1px;min-width:0}
+.mbright .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim)}
+.mstat{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.mswatch{width:46px;height:46px;border-radius:var(--r-md);background:var(--live);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.mtxt{font-size:11px;color:var(--dim);line-height:1.4;text-align:right}
+.mtxt b{display:block;color:var(--text);font-size:13px;font-weight:600}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(5,6,9,.74);backdrop-filter:blur(4px);display:none;z-index:40;
+  align-items:center;justify-content:center;padding:18px}
+.scrim.on{display:flex}
+.modal{
+  width:min(560px,100%);max-height:86dvh;overflow-y:auto;background:var(--chassis);
+  border:1px solid var(--hairline);border-radius:var(--r-lg);padding:20px;
+  box-shadow:0 30px 70px -20px #000;
+}
+.modal h2{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
+.modal .lead{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.55}
+.modalfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.opt{
+  width:100%;text-align:left;padding:12px 14px;border-radius:var(--r-md);background:var(--rail);
+  border:1px solid var(--hairline-soft);margin-bottom:8px;transition:.14s;
+}
+.opt:hover{border-color:var(--hairline)}
+.opt.on{border-color:var(--live);background:linear-gradient(var(--live-soft),var(--live-soft)),var(--rail)}
+.opt .t{font-size:14px;font-weight:500}
+.opt .d{font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.5}
+
+/* ---------- toast ---------- */
+.toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:60;
+  display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:min(440px,calc(100% - 32px))}
+.toast{
+  padding:10px 15px;border-radius:999px;background:var(--raise);border:1px solid var(--hairline);
+  font-size:13px;box-shadow:0 10px 30px -10px #000;animation:pop .22s ease-out;max-width:100%;
+}
+.toast.bad{border-color:rgba(226,97,91,.5);color:#FFC9C6}
+.toast.good{border-color:rgba(91,208,138,.45)}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---------- banner ---------- */
+.banner{
+  display:none;gap:10px;align-items:flex-start;padding:10px 16px;flex:0 0 auto;
+  background:rgba(232,180,74,.1);border-bottom:1px solid rgba(232,180,74,.25);font-size:12.5px;color:#F0D8A4;line-height:1.5;
+}
+.banner.on{display:flex}
+.banner b{color:#FFE9BC}
+.banner button{color:#FFE9BC;text-decoration:underline;font-size:12.5px;flex:0 0 auto}
+
+/* ---------- mobile ---------- */
+.mobnav{display:none}
+@media (max-width:980px){
+  .main{grid-template-columns:1fr}
+  .rail{display:none;position:fixed;inset:0;z-index:30;border:0;padding:16px}
+  .rail.open{display:block}
+  .panel{display:none;border:0}
+  .panel.open{display:flex}
+  .stage{display:flex}
+  .app.showpanel .stage{display:none}
+  .app.showpanel .panel{display:flex}
+  .wheelwrap{width:min(74vw,300px)}
+  .mobnav{
+    display:flex;gap:2px;padding:8px 10px 0;background:var(--chassis);flex:0 0 auto;
+    border-top:1px solid var(--hairline-soft);overflow-x:auto;scrollbar-width:none;
+  }
+  .mobnav::-webkit-scrollbar{display:none}
+  .master{grid-template-columns:auto minmax(0,1fr) auto;gap:12px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+  .mswatch{width:40px;height:40px}
+  .mtxt{display:none}
+  .topdev{display:none}
+}
+@media (max-width:480px){
+  .brand span{display:none}
+  .tiles{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===================== TOP ===================== -->
+  <header class="topbar">
+    <button class="iconbtn" id="btnRail" title="Devices" aria-label="Devices">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="brand"><b>Rangi</b><span>universal colour controller</span></div>
+    <div class="topdev" id="topDev"></div>
+    <button class="iconbtn" id="btnScanTop" title="Add a light" aria-label="Add a light">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="iconbtn" id="btnSettings" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="banner" id="banner">
+    <div id="bannerTxt" style="flex:1"></div>
+    <button id="bannerAct">What to do</button>
+  </div>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="main">
+
+    <!-- ---- devices rail ---- -->
+    <aside class="rail" id="rail">
+      <div class="railhead">
+        <h3>Lights</h3>
+        <button class="iconbtn" id="btnRailClose" style="display:none" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="devList"></div>
+      <button class="addbtn" id="btnScan">Pair a light over Bluetooth</button>
+      <button class="addbtn" id="btnSim" style="margin-top:8px">Add a simulated strip</button>
+
+      <div class="railsec">
+        <div class="railhead"><h3>Groups</h3></div>
+        <div id="grpList"></div>
+        <button class="addbtn" id="btnGroup">New group</button>
+      </div>
+
+      <div class="railsec">
+        <div class="railhead"><h3>Sending to</h3></div>
+        <div class="seg" id="targetSeg">
+          <button data-t="sel" class="on">Selected</button>
+          <button data-t="all">Everything</button>
+        </div>
+        <p class="note">“Everything” sends each change to every connected light at once.</p>
+      </div>
+    </aside>
+
+    <!-- ---- stage ---- -->
+    <section class="stage">
+      <div class="glow" id="glow"></div>
+
+      <div class="wheelwrap" id="wheelWrap">
+        <canvas id="wheel" width="660" height="660"></canvas>
+        <div class="hub">
+          <div class="hex num" id="hubHex">#FF5A2D</div>
+        </div>
+        <div class="knob" id="knob"></div>
+      </div>
+
+      <div class="readout">
+        <div class="pill">HSV <b class="num" id="hubMeta">14° 82% 100%</b></div>
+        <div class="pill">RGB <b class="num" id="roRgb">255 90 45</b></div>
+        <div class="pill">Rate <b class="num" id="roRate">0/s</b></div>
+        <div class="pill" id="roMode">Static colour</div>
+      </div>
+
+      <div class="cct">
+        <div class="row" style="margin-bottom:6px">
+          <label>White temperature</label>
+          <span class="val num" id="cctVal">—</span>
+        </div>
+        <div class="cctbar" id="cctBar"><div class="cctknob" id="cctKnob" style="left:50%"></div></div>
+      </div>
+
+      <div class="simstrip" id="simStrip"></div>
+    </section>
+
+    <!-- ---- panel ---- -->
+    <aside class="panel" id="panel">
+      <nav class="tabs" id="tabs">
+        <button class="tab on" data-p="colour">Colour</button>
+        <button class="tab" data-p="scenes">Scenes</button>
+        <button class="tab" data-p="effects">Effects</button>
+        <button class="tab" data-p="music">Music</button>
+        <button class="tab" data-p="ambient">Ambient</button>
+        <button class="tab" data-p="timers">Timers</button>
+        <button class="tab" data-p="device">Light</button>
+      </nav>
+
+      <!-- COLOUR -->
+      <div class="pane on" data-p="colour">
+        <div class="grp">
+          <h4>Precise values</h4>
+          <div class="row"><label>Hue</label><span class="val num" id="vH">14°</span></div>
+          <input type="range" class="slide grad" id="sH" min="0" max="360" value="14">
+          <div class="row"><label>Saturation</label><span class="val num" id="vS">82%</span></div>
+          <input type="range" class="slide grad" id="sS" min="0" max="100" value="82">
+          <div class="row"><label>Value</label><span class="val num" id="vV">100%</span></div>
+          <input type="range" class="slide grad" id="sV" min="0" max="100" value="100">
+        </div>
+
+        <div class="grp">
+          <h4>Hex</h4>
+          <div class="btnrow">
+            <input class="txt num" id="hexIn" value="#FF5A2D" style="flex:1;min-width:120px" spellcheck="false">
+            <button class="btn" id="btnRand">Surprise me</button>
+          </div>
+        </div>
+
+        <div class="grp">
+          <h4>Saved colours</h4>
+          <div class="sw" id="swatches"></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button class="btn" id="btnSaveSw">Save this colour</button>
+            <button class="btn ghost" id="btnClearSw">Clear saved</button>
+          </div>
+        </div>
+
+        <div class="grp">
+          <h4>Pull colours from a picture</h4>
+          <input type="file" id="imgIn" accept="image/*" class="txt">
+          <div class="sw" id="imgPal" style="margin-top:10px"></div>
+          <p class="note">Rangi reads the picture on your phone. Nothing is uploaded anywhere.</p>
+        </div>
+      </div>
+
+      <!-- SCENES -->
+      <div class="pane" data-p="scenes">
+        <div class="grp">
+          <h4>Built in</h4>
+          <div class="tiles" id="sceneTiles"></div>
+        </div>
+        <div class="grp">
+          <h4>Yours</h4>
+          <div class="tiles" id="mySceneTiles"></div>
+          <div class="empty" id="mySceneEmpty">Build a palette in Effects, then save it here.</div>
+          <div class="btnrow" style="margin-top:10px">
+            <button class="btn prim" id="btnSaveScene">Save what's playing</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EFFECTS -->
+      <div class="pane" data-p="effects">
+        <div class="grp">
+          <h4>Running on your phone</h4>
+          <p class="note" style="margin:0 0 10px">These are drawn frame by frame and streamed to the light, so they can do things the controller's own chip can't.</p>
+          <div class="tiles" id="fxTiles"></div>
+        </div>
+
+        <div class="grp">
+          <h4>Timing</h4>
+          <div class="row"><label>Speed</label><span class="val num" id="vSpeed">50%</span></div>
+          <input type="range" class="slide" id="sSpeed" min="1" max="100" value="50">
+          <div class="row"><label>Depth</label><span class="val num" id="vDepth">100%</span></div>
+          <input type="range" class="slide" id="sDepth" min="0" max="100" value="100">
+          <div class="row"><label>Send rate</label><span class="val num" id="vFps">20/s</span></div>
+          <input type="range" class="slide" id="sFps" min="4" max="40" value="20">
+          <p class="note">Drop the send rate if a light stutters or drops out. Cheap controllers choke above about 25 writes a second.</p>
+        </div>
+
+        <div class="grp">
+          <h4>Spread across lights</h4>
+          <div class="seg" id="spreadSeg">
+            <button data-s="sync" class="on">In step</button>
+            <button data-s="chase">Chase</button>
+            <button data-s="mirror">Mirror</button>
+          </div>
+          <p class="note">Chase offsets each light in the group so the effect travels along the row.</p>
+        </div>
+
+        <div class="grp">
+          <h4>Your own effect</h4>
+          <div id="diyList"></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button class="btn prim" id="btnDiy">Open the effect builder</button>
+          </div>
+        </div>
+
+        <div class="grp">
+          <h4>Built into the controller</h4>
+          <p class="note" style="margin:0 0 10px">The chip runs these on its own, so they keep going if your phone walks away. Fewer options, no Bluetooth traffic.</p>
+          <div class="tiles" id="hwTiles"></div>
+        </div>
+      </div>
+
+      <!-- MUSIC -->
+      <div class="pane" data-p="music">
+        <div class="grp">
+          <h4>Listen to</h4>
+          <div class="seg" id="srcSeg">
+            <button data-s="mic" class="on">Microphone</button>
+            <button data-s="file">A track</button>
+            <button data-s="tab">This device</button>
+          </div>
+          <div class="btnrow" style="margin-top:10px">
+            <button class="btn prim" id="btnMusic">Start listening</button>
+            <button class="btn" id="btnMusicStop" disabled>Stop</button>
+          </div>
+          <input type="file" id="audioIn" accept="audio/*" class="txt" style="margin-top:10px;display:none">
+          <audio id="audioEl" controls style="width:100%;margin-top:10px;display:none"></audio>
+          <p class="note" id="musicNote">The microphone hears the room, so it works with any speaker — a car stereo, a PA, a TV.</p>
+        </div>
+
+        <div class="grp">
+          <h4>Level</h4>
+          <canvas class="viz" id="viz" width="700" height="170"></canvas>
+          <div class="row" style="margin-top:10px"><label>Sensitivity</label><span class="val num" id="vSens">60%</span></div>
+          <input type="range" class="slide" id="sSens" min="1" max="100" value="60">
+          <div class="row"><label>Smoothing</label><span class="val num" id="vSmooth">55%</span></div>
+          <input type="range" class="slide" id="sSmooth" min="0" max="95" value="55">
+        </div>
+
+        <div class="grp">
+          <h4>How it reacts</h4>
+          <div class="tiles" id="musicModes"></div>
+        </div>
+
+        <div class="grp">
+          <h4>Colours it uses</h4>
+          <div class="tiles" id="musicPal"></div>
+        </div>
+      </div>
+
+      <!-- AMBIENT -->
+      <div class="pane" data-p="ambient">
+        <div class="grp">
+          <h4>Match what the camera sees</h4>
+          <p class="note" style="margin:0 0 10px">Point the phone at anything — a wall, a poster, a sunset — and the lights take its colour.</p>
+          <canvas id="camPrev" width="320" height="180" style="width:100%;border-radius:12px;display:none;background:#000"></canvas>
+          <div class="btnrow" style="margin-top:10px">
+            <button class="btn prim" id="btnCam">Open the camera</button>
+            <button class="btn" id="btnCamStop" disabled>Stop</button>
+            <button class="btn" id="btnCamFlip" disabled>Flip</button>
+          </div>
+          <div class="row" style="margin-top:12px"><label>Follow continuously</label>
+            <div class="toggle on" id="tgCamLive"><i></i></div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <h4>Match this screen</h4>
+          <p class="note" style="margin:0 0 10px">Share a window or your whole screen and the lights follow what's on it — a film, a match, a game.</p>
+          <div class="btnrow">
+            <button class="btn prim" id="btnScreen">Share a screen</button>
+            <button class="btn" id="btnScreenStop" disabled>Stop</button>
+          </div>
+          <div class="row" style="margin-top:12px"><label>Ignore dark edges</label>
+            <div class="toggle on" id="tgCrop"><i></i></div>
+          </div>
+          <div class="row"><label>Lift colour</label><span class="val num" id="vPunch">40%</span></div>
+          <input type="range" class="slide" id="sPunch" min="0" max="100" value="40">
+          <p class="note">Lift pushes washed-out frames towards a stronger colour so the room still reads as blue or red.</p>
+        </div>
+      </div>
+
+      <!-- TIMERS -->
+      <div class="pane" data-p="timers">
+        <div class="grp">
+          <h4>Wake up</h4>
+          <div class="row"><label>Time</label><input type="time" class="txt" id="wakeTime" value="06:00" style="width:140px"></div>
+          <div class="row"><label>Fade up over</label><span class="val num" id="vWakeDur">20 min</span></div>
+          <input type="range" class="slide" id="sWakeDur" min="1" max="60" value="20">
+          <div class="row"><label>On</label><div class="toggle" id="tgWake"><i></i></div></div>
+          <p class="note">Starts deep amber and climbs to daylight by the time you've set.</p>
+        </div>
+        <div class="grp">
+          <h4>Wind down</h4>
+          <div class="row"><label>Fade out over</label><span class="val num" id="vSleepDur">30 min</span></div>
+          <input type="range" class="slide" id="sSleepDur" min="1" max="120" value="30">
+          <div class="btnrow"><button class="btn prim" id="btnSleep">Start winding down</button>
+          <button class="btn" id="btnSleepStop" disabled>Cancel</button></div>
+          <p class="note" id="sleepNote">Dims and warms to nothing, then switches the lights off.</p>
+        </div>
+        <div class="grp">
+          <h4>Switch off in</h4>
+          <div class="btnrow" id="countRow"></div>
+          <p class="note" id="countNote">Nothing counting down.</p>
+        </div>
+        <div class="grp">
+          <h4>Daily schedule</h4>
+          <div id="schedList"></div>
+          <div class="btnrow" style="margin-top:8px"><button class="btn" id="btnSched">Add a time</button></div>
+          <p class="note">Timers run while Rangi is open on this device. Keep the tab alive for them to fire.</p>
+        </div>
+      </div>
+
+      <!-- DEVICE -->
+      <div class="pane" data-p="device">
+        <div id="devPane"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ---- mobile nav ---- -->
+  <nav class="mobnav" id="mobnav">
+    <button class="tab on" data-m="stage">Wheel</button>
+    <button class="tab" data-m="colour">Colour</button>
+    <button class="tab" data-m="scenes">Scenes</button>
+    <button class="tab" data-m="effects">Effects</button>
+    <button class="tab" data-m="music">Music</button>
+    <button class="tab" data-m="ambient">Ambient</button>
+    <button class="tab" data-m="timers">Timers</button>
+    <button class="tab" data-m="device">Light</button>
+  </nav>
+
+  <!-- ===================== MASTER ===================== -->
+  <footer class="master">
+    <button class="power on" id="btnPower" aria-label="Power">
+      <svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+    </button>
+    <div class="mbright">
+      <div class="lab"><span>Brightness</span><span class="num" id="brVal">100%</span></div>
+      <input type="range" class="slide" id="sBright" min="1" max="100" value="100" style="margin:0">
+    </div>
+    <div class="mstat">
+      <div class="mtxt"><b id="mTarget">No light</b><span id="mProto">nothing paired</span></div>
+      <div class="mswatch" id="mSwatch"></div>
+    </div>
+  </footer>
+
+  <!-- held outside the panes so frames keep flowing while you watch the wheel -->
+  <video id="cam" playsinline muted
+    style="position:fixed;left:-10000px;top:0;width:240px;height:135px;opacity:0;pointer-events:none"></video>
+  <canvas id="amb" width="64" height="36" style="display:none"></canvas>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ===================== MODALS ===================== -->
+<div class="scrim" id="scrim">
+  <div class="modal" id="modal"></div>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   Rangi — core
+   colour maths · protocol drivers · bluetooth · device manager
+   ============================================================ */
+
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const r255=v=>clamp(Math.round(v),0,255);
+
+/* ---------- colour ---------- */
+function hsv2rgb(h,s,v){
+  h=((h%360)+360)%360; s=clamp(s,0,1); v=clamp(v,0,1);
+  const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
+  let r=0,g=0,b=0;
+  if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;b=x}
+  else if(h<240){g=x;b=c}else if(h<300){r=x;b=c}else{r=c;b=x}
+  return [r255((r+m)*255),r255((g+m)*255),r255((b+m)*255)];
+}
+function rgb2hsv(r,g,b){
+  r/=255;g/=255;b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0;
+  if(d){
+    if(mx===r)h=60*(((g-b)/d)%6);
+    else if(mx===g)h=60*((b-r)/d+2);
+    else h=60*((r-g)/d+4);
+  }
+  return [((h%360)+360)%360, mx?d/mx:0, mx];
+}
+const hex2rgb=h=>{
+  h=String(h).replace('#','').trim();
+  if(h.length===3)h=h.split('').map(c=>c+c).join('');
+  if(!/^[0-9a-f]{6}$/i.test(h))return null;
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+};
+const rgb2hex=(r,g,b)=>'#'+[r,g,b].map(v=>r255(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+
+/* Tanner Helland's blackbody approximation, 1000–40000K */
+function kelvin2rgb(k){
+  const t=clamp(k,1000,40000)/100; let r,g,b;
+  if(t<=66){ r=255; g=99.4708025861*Math.log(t)-161.1195681661; }
+  else { r=329.698727446*Math.pow(t-60,-0.1332047592); g=288.1221695283*Math.pow(t-60,-0.0755148492); }
+  if(t>=66) b=255;
+  else if(t<=19) b=0;
+  else b=138.5177312231*Math.log(t-10)-305.0447927307;
+  return [r255(r),r255(g),r255(b)];
+}
+
+/* ---------- protocol drivers ----------
+   Community-reverse-engineered frames. Where a unit disagrees,
+   the variant / trailer bytes in Light settings are the fix. */
+const PROTO = {
+  bledom:{
+    label:'ELK-BLEDOM family',
+    hint:'ELK-BLEDOM · ELK-BLEDOB · ELK-BLEDDM · LEDBLE · duoCo Strip',
+    service:'0000fff0-0000-1000-8000-00805f9b34fb',
+    write:'0000fff3-0000-1000-8000-00805f9b34fb',
+    names:/elk|bledom|bledob|bleddm|ledble|duoco|melk/i,
+    caps:{bright:true,white:false,speed:true,hwfx:true},
+    power:(on,d)=>on?[0x7e,d.v,0x04,0xf0,0x00,0x01,0xff,0x00,0xef]
+                   :[0x7e,d.v,0x04,0x00,0x00,0x00,0xff,0x00,0xef],
+    rgb:(r,g,b,d)=>[0x7e,d.v,0x05,0x03,r,g,b,d.m,0xef],
+    bright:(p,d)=>[0x7e,d.v,0x01,clamp(Math.round(p),0,100),0x00,0x00,0x00,0x00,0xef],
+    speed:(p,d)=>[0x7e,d.v,0x02,clamp(Math.round(p),0,100),0x00,0x00,0x00,0x00,0xef],
+    hwfx:(id,d)=>[0x7e,d.v,0x03,id,0x03,0x00,0x00,0x00,0xef],
+    fx:[[0x87,'Red fade'],[0x88,'Green fade'],[0x89,'Blue fade'],[0x8a,'Yellow fade'],
+        [0x8b,'Cyan fade'],[0x8c,'Purple fade'],[0x8d,'White fade'],[0x8e,'Red to green'],
+        [0x8f,'Red to blue'],[0x90,'Green to blue'],[0x91,'Seven colour fade'],[0x92,'Red jump'],
+        [0x93,'Green jump'],[0x94,'Blue jump'],[0x95,'Yellow jump'],[0x96,'Cyan jump'],
+        [0x97,'Purple jump'],[0x98,'White jump'],[0x99,'Seven colour jump'],[0x9a,'Red flash'],
+        [0x9b,'Green flash'],[0x9c,'Blue flash']]
+  },
+  triones:{
+    label:'Triones / HappyLighting',
+    hint:'Triones-XXXX · HappyLighting · many RGBW strip boxes',
+    service:'0000ffd5-0000-1000-8000-00805f9b34fb',
+    write:'0000ffd9-0000-1000-8000-00805f9b34fb',
+    notify:'0000ffd4-0000-1000-8000-00805f9b34fb',
+    names:/triones|happylighting|^qhm|^lotus/i,
+    caps:{bright:false,white:true,speed:true,hwfx:true},
+    power:on=>[0xcc,on?0x23:0x24,0x33],
+    rgb:(r,g,b)=>[0x56,r,g,b,0x00,0xf0,0xaa],
+    white:w=>[0x56,0,0,0,r255(w),0x0f,0xaa],
+    hwfx:(id,d)=>[0xbb,id,clamp(Math.round(101-d.sp),1,255),0x44],
+    fx:[[0x25,'Seven colour fade'],[0x26,'Red fade'],[0x27,'Green fade'],[0x28,'Blue fade'],
+        [0x29,'Yellow fade'],[0x2a,'Cyan fade'],[0x2b,'Purple fade'],[0x2c,'White fade'],
+        [0x2d,'Red to green'],[0x2e,'Red to blue'],[0x2f,'Green to blue'],[0x30,'Seven colour flash'],
+        [0x31,'Red flash'],[0x32,'Green flash'],[0x33,'Blue flash'],[0x34,'Yellow flash'],
+        [0x35,'Cyan flash'],[0x36,'Purple flash'],[0x37,'White flash'],[0x38,'Seven colour jump']]
+  },
+  magic:{
+    label:'MagicLight / Zengge bulbs',
+    hint:'LEDBlue · LEDnet · Magic Hue bulbs and controllers',
+    service:'0000ffe5-0000-1000-8000-00805f9b34fb',
+    write:'0000ffe9-0000-1000-8000-00805f9b34fb',
+    notify:'0000ffe4-0000-1000-8000-00805f9b34fb',
+    names:/ledblue|lednet|magic|zengge|^zj-/i,
+    caps:{bright:false,white:true,speed:true,hwfx:true},
+    power:on=>[0xcc,on?0x23:0x24,0x33],
+    rgb:(r,g,b)=>[0x56,r,g,b,0x00,0xf0,0xaa],
+    white:w=>[0x56,0,0,0,r255(w),0x0f,0xaa],
+    hwfx:(id,d)=>[0xbb,id,clamp(Math.round(101-d.sp),1,255),0x44],
+    fx:[[0x25,'Seven colour fade'],[0x26,'Red fade'],[0x27,'Green fade'],[0x28,'Blue fade'],
+        [0x29,'Yellow fade'],[0x2a,'Cyan fade'],[0x2b,'Purple fade'],[0x2c,'White fade'],
+        [0x30,'Seven colour flash'],[0x38,'Seven colour jump']]
+  },
+  sp110e:{
+    label:'SP110E / SP107E pixel',
+    hint:'Addressable RGBIC — SP110E, SP107E, SP105E, BanlanX',
+    service:'0000ffe0-0000-1000-8000-00805f9b34fb',
+    write:'0000ffe1-0000-1000-8000-00805f9b34fb',
+    names:/^sp1|^sp0|banlanx|^bx/i,
+    caps:{bright:true,white:true,speed:true,hwfx:true},
+    power:on=>[0,0,0,on?0xaa:0xab],
+    rgb:(r,g,b)=>[r,g,b,0x1e],
+    bright:p=>[r255(p*2.55),0,0,0x2a],
+    white:w=>[r255(w),0,0,0x69],
+    speed:p=>[r255(p*2.55),0,0,0x03],
+    hwfx:id=>[id,0,0,0x2c],
+    fx:Array.from({length:24},(_,i)=>[i,'Preset '+(i+1)])
+  }
+};
+const PROTO_KEYS=Object.keys(PROTO);
+
+/* ---------- persistence ---------- */
+const store={
+  get(k,d){ try{const v=localStorage.getItem('rangi.'+k);return v==null?d:JSON.parse(v)}catch(e){return d} },
+  set(k,v){ try{localStorage.setItem('rangi.'+k,JSON.stringify(v))}catch(e){} }
+};
+
+/* ---------- state ---------- */
+const S={
+  devices:[],            // live device objects
+  groups:store.get('groups',[]),
+  sel:null,              // selected device id
+  targetMode:'sel',      // 'sel' | 'all'
+  h:14,s:0.82,v:1,       // master colour
+  bright:100,
+  power:true,
+  mode:'static',         // static | cct | fx | music | ambient | diy
+  cct:null,
+  fx:null, diy:null,
+  speed:50, depth:100, fps:20, spread:'sync',
+  music:{on:false,src:'mic',mode:'spectrum',sens:60,smooth:55,pal:'warm'},
+  amb:{cam:false,screen:false,live:true,crop:true,punch:40},
+  swatches:store.get('swatches',['#FF5A2D','#FFD166','#06D6A0','#118AB2','#8338EC','#FF006E']),
+  myScenes:store.get('myScenes',[]),
+  diys:store.get('diys',[]),
+  sched:store.get('sched',[]),
+  writes:0, rate:0
+};
+
+/* ---------- device ---------- */
+let devSeq=0;
+function mkDevice(o){
+  return Object.assign({
+    uid:'d'+(++devSeq),
+    name:'Light', kind:'ble', proto:'bledom',
+    gatt:null, char:null, notifyChar:null, connected:false,
+    group:null,
+    v:0x00,          // BLEDOM variant byte
+    m:0x00,          // BLEDOM trailer byte
+    sp:50,           // speed, for hw effects
+    order:'RGB', gamma:1.0, trim:[100,100,100], max:100, min:0, useW:true,
+    cur:[255,90,45],
+    _pending:null,_busy:false,_fail:0
+  },o);
+}
+
+/* ---------- calibration ---------- */
+function calibrate(d,r,g,b){
+  const t=d.trim, gm=d.gamma;
+  let c=[r,g,b].map((v,i)=>{
+    let x=v/255;
+    if(gm!==1) x=Math.pow(x,gm);
+    x*= (t[i]||100)/100;
+    return x*255;
+  });
+  const o=d.order;
+  if(o!=='RGB'){
+    const map={RGB:[0,1,2],RBG:[0,2,1],GRB:[1,0,2],GBR:[1,2,0],BRG:[2,0,1],BGR:[2,1,0]}[o]||[0,1,2];
+    c=[c[map[0]],c[map[1]],c[map[2]]];
+  }
+  return c.map(r255);
+}
+
+/* ---------- write pump (one in flight per device) ---------- */
+async function pump(d){
+  if(d._busy||!d._pending||!d.char) return;
+  d._busy=true;
+  while(d._pending){
+    const bytes=d._pending; d._pending=null;
+    try{
+      const buf=new Uint8Array(bytes);
+      if(d.char.writeValueWithoutResponse) await d.char.writeValueWithoutResponse(buf);
+      else await d.char.writeValue(buf);
+      S.writes++; d._fail=0;
+    }catch(err){
+      d._fail++;
+      if(d._fail===1) toast(d.name+' refused a command.','bad');
+      if(d._fail>6){ d.connected=false; renderDevices(); break; }
+      await new Promise(r=>setTimeout(r,40));
+    }
+  }
+  d._busy=false;
+}
+function send(d,bytes){
+  if(!bytes) return;
+  if(d.kind==='sim'){ S.writes++; return; }
+  if(!d.connected||!d.char) return;
+  d._pending=bytes;          // latest wins — never queue a backlog
+  pump(d);
+}
+
+/* ---------- high level light commands ---------- */
+function devColour(d,r,g,b){
+  const p=PROTO[d.proto];
+  d.cur=[r,g,b];
+  if(d.kind==='sim'){ S.writes++; return; }   // counted so the rate meter reads true in simulation
+  const [cr,cg,cb]=calibrate(d,r,g,b);
+  send(d,p.rgb(cr,cg,cb,d));
+}
+function devPower(d,on){
+  const p=PROTO[d.proto];
+  if(d.kind!=='sim') send(d,p.power(on,d));
+}
+function devBright(d,pct){
+  const p=PROTO[d.proto];
+  if(d.kind==='sim'||!p.caps.bright) return false;
+  send(d,p.bright(pct,d)); return true;
+}
+function devWhite(d,v){
+  const p=PROTO[d.proto];
+  if(d.kind==='sim'||!p.white) return false;
+  send(d,p.white(v,d)); return true;
+}
+function devHwFx(d,id){
+  const p=PROTO[d.proto];
+  if(d.kind==='sim'||!p.hwfx) return false;
+  if(p.speed) send(d,p.speed(d.sp,d));
+  setTimeout(()=>send(d,p.hwfx(id,d)),60);
+  return true;
+}
+
+/* ---------- targets ---------- */
+function targets(){
+  if(S.targetMode==='all') return S.devices.filter(d=>d.connected||d.kind==='sim');
+  const d=S.devices.find(x=>x.uid===S.sel);
+  if(!d) return [];
+  if(d.group){
+    const g=S.devices.filter(x=>x.group===d.group&&(x.connected||x.kind==='sim'));
+    if(g.length) return g;
+  }
+  return (d.connected||d.kind==='sim')?[d]:[];
+}
+
+/* ---------- bluetooth ---------- */
+const BLE_OK = typeof navigator!=='undefined' && !!navigator.bluetooth;
+
+async function pair(){
+  if(!BLE_OK){ bleHelp(); return; }
+  const services=PROTO_KEYS.map(k=>PROTO[k].service);
+  let dev;
+  try{
+    dev=await navigator.bluetooth.requestDevice({
+      acceptAllDevices:true,
+      optionalServices:services
+    });
+  }catch(e){
+    if(e && e.name==='NotFoundError') return;        // user closed the chooser
+    toast('Could not open the Bluetooth picker: '+(e.message||e),'bad'); return;
+  }
+  await attach(dev);
+}
+
+async function attach(btDev){
+  const d=mkDevice({name:btDev.name||'Unnamed light',kind:'ble'});
+  d._bt=btDev;
+  S.devices.push(d); S.sel=d.uid; renderDevices();
+  toast('Connecting to '+d.name+'…');
+  btDev.addEventListener('gattserverdisconnected',()=>{
+    d.connected=false; renderDevices(); renderMaster();
+    toast(d.name+' dropped out.','bad');
+  });
+  try{
+    const server=await btDev.gatt.connect();
+    d.gatt=server;
+
+    // Identify the protocol from what the device actually exposes,
+    // not from its advertised name — names lie, GATT doesn't.
+    let svcs=[];
+    try{ svcs=await server.getPrimaryServices(); }catch(e){}
+    const have=new Set(svcs.map(s=>s.uuid.toLowerCase()));
+    let key=PROTO_KEYS.find(k=>have.has(PROTO[k].service));
+    if(!key) key=PROTO_KEYS.find(k=>PROTO[k].names.test(d.name));
+    if(!key){
+      // last resort: any service that carries a writable characteristic
+      for(const s of svcs){
+        const cs=await s.getCharacteristics().catch(()=>[]);
+        const w=cs.find(c=>c.properties.write||c.properties.writeWithoutResponse);
+        if(w){ d.char=w; d.proto='bledom'; d.connected=true; break; }
+      }
+      if(!d.char){ throw new Error('no writable characteristic found'); }
+      toast('Protocol unknown — guessing. Try the prober in Light settings.','bad');
+      renderDevices(); renderMaster(); renderDevPane(); return;
+    }
+    await bindProto(d,key);
+    d.connected=true;
+    if(/bledob/i.test(d.name)){ d.v=0x07; d.m=0x0a; }
+    toast(d.name+' is on '+PROTO[key].label,'good');
+    renderDevices(); renderMaster(); renderDevPane(); renderHw();
+    setTimeout(()=>{ devPower(d,S.power); pushColour(); },120);
+  }catch(e){
+    toast('Connection failed: '+(e.message||e),'bad');
+    d.connected=false; renderDevices();
+  }
+}
+
+async function bindProto(d,key){
+  const p=PROTO[key];
+  const svc=await d.gatt.getPrimaryService(p.service);
+  d.char=await svc.getCharacteristic(p.write);
+  d.proto=key;
+  if(p.notify){
+    try{
+      const n=await svc.getCharacteristic(p.notify);
+      await n.startNotifications();
+      d.notifyChar=n;
+    }catch(e){}
+  }
+}
+
+/* Reconnect to a device the browser already has permission for */
+async function restorePaired(){
+  if(!BLE_OK||!navigator.bluetooth.getDevices) return;
+  let known=[];
+  try{ known=await navigator.bluetooth.getDevices(); }catch(e){ return; }
+  if(!known.length) return;
+  toast(known.length+' light'+(known.length>1?'s':'')+' remembered — tap one to reconnect.');
+  known.forEach(bt=>{
+    const d=mkDevice({name:bt.name||'Remembered light',kind:'ble'});
+    d._bt=bt; d.connected=false; d._remembered=true;
+    S.devices.push(d);
+  });
+  renderDevices();
+}
+async function reconnect(d){
+  if(!d._bt) return;
+  toast('Reconnecting to '+d.name+'…');
+  try{
+    const server=await d._bt.gatt.connect();
+    d.gatt=server;
+    await bindProto(d,d.proto);
+    d.connected=true; d._remembered=false;
+    renderDevices(); renderMaster();
+    devPower(d,S.power); pushColour();
+    toast(d.name+' is back.','good');
+  }catch(e){ toast('Still out of reach. Is it powered?','bad'); }
+}
+
+/* ---------- simulated strip ---------- */
+function addSim(){
+  const n=S.devices.filter(d=>d.kind==='sim').length+1;
+  const d=mkDevice({name:'Simulated strip '+n,kind:'sim',proto:'bledom',connected:true});
+  S.devices.push(d); S.sel=d.uid;
+  renderDevices(); renderMaster(); renderDevPane(); renderHw(); pushColour();
+  toast('Simulated strip added — everything works, nothing lights up.');
+}
+
+/* ---------- toasts ---------- */
+function toast(msg,kind){
+  const t=document.createElement('div');
+  t.className='toast'+(kind?' '+kind:'');
+  t.textContent=msg;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';},2600);
+  setTimeout(()=>t.remove(),3000);
+}
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Rangi — motion
+   effect library · render loop · music · ambient capture
+   ============================================================ */
+
+/* cheap deterministic noise */
+function nz(x){ const s=Math.sin(x*127.1)*43758.5453; return s-Math.floor(s); }
+function snz(x){ const i=Math.floor(x), f=x-i, u=f*f*(3-2*f); return lerp(nz(i),nz(i+1),u); }
+
+const PALETTES={
+  warm:  ['#FF3B1F','#FF7A1A','#FFB03A','#FFD98A','#FF4D6D'],
+  neon:  ['#FF006E','#FB5607','#FFBE0B','#3A86FF','#8338EC'],
+  ocean: ['#012A4A','#01497C','#2A6F97','#61A5C2','#A9D6E5'],
+  forest:['#0B3D2E','#1B5E3F','#2D936C','#88D498','#C6DABF'],
+  ice:   ['#CAF0F8','#90E0EF','#00B4D8','#0077B6','#FFFFFF'],
+  mono:  null  // uses the wheel colour
+};
+function palOf(name){
+  if(name==='mono'||!PALETTES[name]){
+    const [r,g,b]=hsv2rgb(S.h,S.s,1);
+    return [[r,g,b]];
+  }
+  return PALETTES[name].map(hex2rgb);
+}
+
+/* ---------- effect library ----------
+   Each returns [r,g,b] for a moment in time.
+   t seconds, p = phase offset 0..1 for spreading across lights,
+   d = depth 0..1, base = the colour on the wheel. */
+const FX={
+  breathe:{n:'Breathe',d:'Slow swell, like sleep',f:(t,p,d,b)=>{
+    const k=(Math.sin((t*0.9+p)*Math.PI*2-Math.PI/2)*0.5+0.5);
+    return hsv2rgb(b.h,b.s,b.v*(1-d+d*(0.06+0.94*k)));
+  }},
+  pulse:{n:'Pulse',d:'Steady on-off',f:(t,p,d,b)=>{
+    const k=((t*1.6+p)%1)<0.5?1:1-d;
+    return hsv2rgb(b.h,b.s,b.v*k);
+  }},
+  strobe:{n:'Strobe',d:'Hard flash',f:(t,p,d,b)=>{
+    const k=((t*9+p)%1)<0.35?1:1-d;
+    return hsv2rgb(b.h,b.s,b.v*k);
+  }},
+  heartbeat:{n:'Heartbeat',d:'Two thumps, then rest',f:(t,p,d,b)=>{
+    const x=(t*1.1+p)%1;
+    let k=0;
+    if(x<0.11) k=Math.sin(x/0.11*Math.PI);
+    else if(x>0.18&&x<0.30) k=Math.sin((x-0.18)/0.12*Math.PI)*0.75;
+    return hsv2rgb(b.h,b.s,b.v*(1-d+d*k));
+  }},
+  candle:{n:'Candle',d:'Warm, restless flame',f:(t,p,d)=>{
+    const f=snz((t+p*7)*7)*0.5+snz((t+p*7)*19)*0.3+snz((t+p*7)*41)*0.2;
+    const v=0.5+0.5*f, h=24+f*14;
+    return hsv2rgb(h,0.86-f*0.12,(1-d*0.5)+d*0.5*v);
+  }},
+  fire:{n:'Fire',d:'Deep embers up to flame',f:(t,p,d)=>{
+    const f=snz((t+p*5)*5)*0.6+snz((t+p*5)*13)*0.4;
+    return hsv2rgb(4+f*34,1-f*0.22,(1-d*0.65)+d*0.65*(0.35+0.65*f));
+  }},
+  lightning:{n:'Lightning',d:'Dark, then a crack of white',f:(t,p,d)=>{
+    const seed=Math.floor((t+p*3)*1.3), r=nz(seed);
+    const x=((t+p*3)*1.3)%1;
+    let k=0.04;
+    if(r>0.62){
+      if(x<0.05) k=1;
+      else if(x<0.09) k=0.15;
+      else if(x<0.14) k=0.85;
+      else if(x<0.2) k=0.1;
+    }
+    return hsv2rgb(220,0.06,(1-d)*0.5+d*k);
+  }},
+  rainbow:{n:'Rainbow flow',d:'Every hue, forever',f:(t,p,d,b)=>
+    hsv2rgb((t*42+p*360)%360, 0.55+0.45*d, b.v)},
+  wave:{n:'Hue drift',d:'Wanders around your colour',f:(t,p,d,b)=>
+    hsv2rgb(b.h+Math.sin((t*0.5+p)*Math.PI*2)*60*d, b.s, b.v)},
+  cycle:{n:'Palette fade',d:'Glides through a palette',f:(t,p,d,b,pal)=>{
+    const n=pal.length, x=(t*0.35+p)*n, i=Math.floor(x)%n, j=(i+1)%n, f=x-Math.floor(x);
+    const c=[0,1,2].map(k=>lerp(pal[i][k],pal[j][k],f));
+    return c.map(v=>r255(v*b.v));
+  }},
+  jump:{n:'Palette jump',d:'Snaps between colours',f:(t,p,d,b,pal)=>{
+    const n=pal.length, i=Math.floor((t*1.4+p)*n)%n;
+    return pal[i].map(v=>r255(v*b.v));
+  }},
+  twinkle:{n:'Twinkle',d:'Random sparkle',f:(t,p,d,b)=>{
+    const k=Math.pow(snz((t+p*11)*11),2.2);
+    return hsv2rgb(b.h,b.s*(0.5+0.5*k),b.v*((1-d)+d*(0.1+0.9*k)));
+  }},
+  police:{n:'Police',d:'Red and blue, hard',f:(t,p)=>{
+    const x=((t*4.5+p)%1);
+    if(x<0.12||((x>0.2)&&x<0.32)) return [255,0,0];
+    if((x>0.5&&x<0.62)||(x>0.7&&x<0.82)) return [0,40,255];
+    return [0,0,0];
+  }},
+  sunrise:{n:'Sunrise',d:'Night to daylight, 4 minutes',f:(t,p,d)=>{
+    const x=clamp((t%240)/240,0,1);
+    const k=kelvin2rgb(lerp(1700,5600,Math.pow(x,0.7)));
+    const v=Math.pow(x,1.4)*0.98+0.02;
+    return k.map(c=>r255(c*v));
+  }},
+  sunset:{n:'Sunset',d:'Daylight down to embers',f:(t,p,d)=>{
+    const x=clamp((t%240)/240,0,1);
+    const k=kelvin2rgb(lerp(5600,1600,Math.pow(x,0.8)));
+    const v=1-Math.pow(x,1.6)*0.94;
+    return k.map(c=>r255(c*v));
+  }},
+  ocean:{n:'Ocean',d:'Cold blues, slow swell',f:(t,p,d,b)=>{
+    const h=190+Math.sin((t*0.3+p)*Math.PI*2)*34;
+    const v=0.45+0.55*(Math.sin((t*0.42+p*1.7)*Math.PI*2)*0.5+0.5);
+    return hsv2rgb(h,0.9,(1-d*0.6)+d*0.6*v);
+  }},
+  forest:{n:'Forest',d:'Greens under moving leaves',f:(t,p,d)=>{
+    const f=snz((t+p*4)*2.2);
+    return hsv2rgb(96+f*44,0.72+f*0.2,(1-d*0.5)+d*0.5*(0.4+0.6*f));
+  }},
+  sweep:{n:'Sweep',d:'Travels along a group',f:(t,p,d,b)=>{
+    const x=((t*0.8+p)%1);
+    const k=Math.exp(-Math.pow((x-0.5)*4.5,2));
+    return hsv2rgb(b.h,b.s,b.v*((1-d)+d*k));
+  }},
+  random:{n:'Drift',d:'Never repeats',f:(t,p,d,b)=>{
+    const h=snz((t*0.25+p*9))*360;
+    const v=0.6+0.4*snz((t*0.4+p*3)+50);
+    return hsv2rgb(h,0.4+0.6*d,b.v*v);
+  }}
+};
+const FX_KEYS=Object.keys(FX);
+
+/* CSS gradient preview, sampled from the effect itself */
+function fxSwatch(key,pal){
+  const f=FX[key].f, b={h:S.h,s:S.s,v:1}, P=pal||palOf('neon');
+  const stops=[];
+  for(let i=0;i<=7;i++){
+    const c=f(i*0.42,0,1,b,P)||[0,0,0];
+    stops.push(rgb2hex(c[0],c[1],c[2])+' '+Math.round(i/7*100)+'%');
+  }
+  return 'linear-gradient(90deg,'+stops.join(',')+')';
+}
+
+/* ---------- DIY effects ---------- */
+function diyColour(def,t,p){
+  const st=def.stops; if(!st||!st.length) return [0,0,0];
+  const total=st.reduce((a,s)=>a+s.ms,0)||1000;
+  let x=(((t*1000*(def.speed||1))+p*total)%total);
+  let i=0;
+  while(i<st.length && x>st[i].ms){ x-=st[i].ms; i++; }
+  i=Math.min(i,st.length-1);
+  const a=hex2rgb(st[i].c)||[0,0,0];
+  if(def.mode==='jump') return a;
+  const b=hex2rgb(st[(i+1)%st.length].c)||[0,0,0];
+  const f=clamp(x/(st[i].ms||1),0,1);
+  return [0,1,2].map(k=>r255(lerp(a[k],b[k],f)));
+}
+
+/* ---------- the loop ---------- */
+let engStart=performance.now(), lastFrame=0, rateWin=performance.now(), rateCnt=0;
+const DYNAMIC=new Set(['fx','music','ambient','diy']);
+
+function frameColour(t,p){
+  const base={h:S.h,s:S.s,v:1};
+  const d=S.depth/100;
+  if(S.mode==='fx'&&S.fx){
+    return FX[S.fx].f(t,p,d,base,palOf(S.music.pal==='mono'?'neon':S.music.pal));
+  }
+  if(S.mode==='diy'&&S.diy){
+    const def=S.diys.find(x=>x.id===S.diy);
+    if(def) return diyColour(def,t,p);
+  }
+  if(S.mode==='music') return MUSIC.colour(t,p);
+  if(S.mode==='ambient') return AMB.cur.slice();
+  return hsv2rgb(S.h,S.s,S.v);
+}
+
+function tick(now){
+  requestAnimationFrame(tick);
+
+  // rate meter
+  if(now-rateWin>=1000){
+    S.rate=S.writes-rateCnt; rateCnt=S.writes; rateWin=now;
+    const el=$('#roRate'); if(el) el.textContent=S.rate+'/s';
+  }
+
+  if(!DYNAMIC.has(S.mode)) return;
+  const interval=1000/S.fps;
+  if(now-lastFrame<interval) return;
+  lastFrame=now;
+  if(!S.power) return;
+
+  const t=(now-engStart)/1000*(S.speed/50);
+  const ts=targets(); if(!ts.length) return;
+  const n=ts.length;
+  ts.forEach((d,i)=>{
+    const p = S.spread==='sync' ? 0
+            : S.spread==='chase' ? i/n
+            : (i%2?0.5:0);
+    const c=frameColour(t,p);
+    if(!c) return;
+    const k=S.bright/100;
+    const out=[r255(c[0]*k),r255(c[1]*k),r255(c[2]*k)];
+    devColour(d,out[0],out[1],out[2]);
+  });
+  paintLive(ts[0]?ts[0].cur:[0,0,0]);
+  paintStrip();
+}
+
+/* static colour, throttled so a slider drag can't flood the radio */
+let pushT=0,pushPending=false;
+function pushColour(force){
+  const now=performance.now();
+  if(!force && now-pushT<40){
+    if(!pushPending){ pushPending=true; setTimeout(()=>{pushPending=false;pushColour(true)},45); }
+    return;
+  }
+  pushT=now;
+  const ts=targets();
+  let rgb;
+  if(S.mode==='cct'&&S.cct!=null) rgb=kelvin2rgb(S.cct);
+  else rgb=hsv2rgb(S.h,S.s,S.v);
+  const k=S.bright/100;
+  const out=[r255(rgb[0]*k),r255(rgb[1]*k),r255(rgb[2]*k)];
+  ts.forEach(d=>{
+    if(!S.power) return;
+    // a real white channel beats mixed RGB white, where the strip has one
+    if(S.mode==='cct' && d.useW && PROTO[d.proto].white && d.kind!=='sim'){
+      devWhite(d,255*k); d.cur=out; return;
+    }
+    // use the chip's own dimmer where it has one — it dims smoother than scaling RGB
+    if(PROTO[d.proto].caps.bright && d.kind!=='sim'){
+      devColour(d,rgb[0],rgb[1],rgb[2]);
+      devBright(d,S.bright);
+      d.cur=out;
+    } else {
+      devColour(d,out[0],out[1],out[2]);
+    }
+  });
+  paintLive(out); paintStrip();
+}
+
+/* ============================================================
+   MUSIC
+   ============================================================ */
+const MUSIC={
+  ctx:null, an:null, src:null, data:null, stream:null,
+  level:0, bass:0, mid:0, treb:0, centroid:0.5,
+  beatAvg:0, beatAt:0, palIdx:0, flash:0,
+
+  async start(){
+    const mode=S.music.src;
+    try{
+      this.ctx=this.ctx||new (window.AudioContext||window.webkitAudioContext)();
+      await this.ctx.resume();
+      if(mode==='mic'){
+        this.stream=await navigator.mediaDevices.getUserMedia({audio:{
+          echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+        this.src=this.ctx.createMediaStreamSource(this.stream);
+      }else if(mode==='tab'){
+        this.stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        if(!this.stream.getAudioTracks().length){
+          toast('No sound came through. Tick “Share audio” when you pick the tab.','bad');
+          this.stop(); return false;
+        }
+        this.src=this.ctx.createMediaStreamSource(this.stream);
+      }else{
+        const el=$('#audioEl');
+        if(!el.src){ toast('Choose a track first.','bad'); return false; }
+        if(!this._fileSrc) this._fileSrc=this.ctx.createMediaElementSource(el);
+        this.src=this._fileSrc;
+        this.src.connect(this.ctx.destination);
+        el.play().catch(()=>{});
+      }
+      this.an=this.ctx.createAnalyser();
+      this.an.fftSize=1024;
+      this.an.smoothingTimeConstant=S.music.smooth/100;
+      this.src.connect(this.an);
+      this.data=new Uint8Array(this.an.frequencyBinCount);
+      S.music.on=true; S.mode='music';
+      this.draw();
+      return true;
+    }catch(e){
+      toast(e.name==='NotAllowedError'
+        ?'Rangi needs permission to listen. Allow it in your browser, then try again.'
+        :'Could not start listening: '+(e.message||e),'bad');
+      return false;
+    }
+  },
+
+  stop(){
+    S.music.on=false;
+    try{ if(this.stream) this.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    try{ if(this.src&&this.an) this.src.disconnect(this.an); }catch(e){}
+    this.stream=null; this.an=null;
+    const el=$('#audioEl'); if(el) el.pause();
+  },
+
+  read(){
+    if(!this.an) return;
+    this.an.smoothingTimeConstant=S.music.smooth/100;
+    this.an.getByteFrequencyData(this.data);
+    const sr=this.ctx.sampleRate, n=this.data.length, binHz=sr/2/n;
+    const band=(lo,hi)=>{
+      const a=Math.max(0,Math.floor(lo/binHz)), b=Math.min(n-1,Math.ceil(hi/binHz));
+      let s=0; for(let i=a;i<=b;i++) s+=this.data[i];
+      return (s/Math.max(1,b-a+1))/255;
+    };
+    const gain=0.4+ (S.music.sens/100)*2.6;
+    this.bass=clamp(band(20,250)*gain,0,1);
+    this.mid =clamp(band(250,4000)*gain,0,1);
+    this.treb=clamp(band(4000,14000)*gain,0,1);
+    this.level=clamp((this.bass*0.55+this.mid*0.33+this.treb*0.12)*1.15,0,1);
+
+    let num=0,den=0;
+    for(let i=0;i<n;i++){ const m=this.data[i]/255; num+=m*i; den+=m; }
+    this.centroid=den?clamp((num/den)/n*3.4,0,1):0.5;
+
+    // adaptive beat gate on the low end
+    this.beatAvg=this.beatAvg*0.92+this.bass*0.08;
+    const now=performance.now();
+    if(this.bass>this.beatAvg*1.38 && this.bass>0.22 && now-this.beatAt>190){
+      this.beatAt=now; this.palIdx++; this.flash=1;
+    }
+    this.flash*=0.86;
+  },
+
+  colour(t,p){
+    this.read();
+    const pal=palOf(S.music.pal), m=S.music.mode, base={h:S.h,s:S.s};
+    const lv=Math.pow(this.level,0.85);
+    if(m==='bass'){
+      const c=pal[0];
+      const k=clamp(Math.pow(this.bass,0.8),0.02,1);
+      return c.map(v=>r255(v*k));
+    }
+    if(m==='beat'){
+      const c=pal[(this.palIdx+Math.round(p*pal.length))%pal.length];
+      const k=clamp(0.25+this.flash*0.75,0,1);
+      return c.map(v=>r255(v*k));
+    }
+    if(m==='vu'){
+      const h=lerp(130,0,Math.pow(lv,0.7));
+      return hsv2rgb(h,1,clamp(0.12+lv,0,1));
+    }
+    if(m==='flash'){
+      const k=clamp(this.flash,0,1);
+      if(k<0.06) return [0,0,0];
+      return hsv2rgb(base.h,base.s*(1-k*0.8),k);
+    }
+    // spectrum: bass→red end, treble→blue end
+    const h=((this.centroid*300)+(p*40))%360;
+    return hsv2rgb(h, 0.65+0.35*(1-this.treb), clamp(0.1+lv,0,1));
+  },
+
+  draw(){
+    if(!S.music.on) return;
+    requestAnimationFrame(()=>this.draw());
+    const cv=$('#viz'); if(!cv||!this.an) return;
+    const g=cv.getContext('2d'), W=cv.width, H=cv.height;
+    this.read();
+    g.clearRect(0,0,W,H);
+    const bars=56, step=Math.floor(this.data.length/bars);
+    for(let i=0;i<bars;i++){
+      let s=0; for(let j=0;j<step;j++) s+=this.data[i*step+j];
+      const v=(s/step)/255*(0.4+S.music.sens/100*2.2);
+      const h=clamp(v,0,1)*H;
+      const c=hsv2rgb(lerp(0,280,i/bars),0.8,1);
+      g.fillStyle='rgba('+c[0]+','+c[1]+','+c[2]+',.85)';
+      g.fillRect(i*(W/bars)+1,H-h,(W/bars)-2,h);
+    }
+    g.fillStyle='rgba(255,255,255,'+(0.08+this.flash*0.3)+')';
+    g.fillRect(0,0,W,H);
+  }
+};
+
+/* ============================================================
+   AMBIENT — camera and screen
+   ============================================================ */
+const AMB={
+  stream:null, kind:null, raf:0, facing:'environment', cur:[255,90,45],
+
+  async cam(){
+    try{
+      this.stop();
+      this.stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:this.facing,width:{ideal:640}}});
+      const v=$('#cam'); v.srcObject=this.stream;
+      await v.play();
+      $('#camPrev').style.display='block';
+      this.kind='cam'; S.mode='ambient'; this.loop();
+      return true;
+    }catch(e){
+      toast(e.name==='NotAllowedError'
+        ?'Camera permission was turned down.'
+        :'Could not open the camera: '+(e.message||e),'bad');
+      return false;
+    }
+  },
+
+  async screen(){
+    try{
+      this.stop();
+      this.stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:15},audio:false});
+      const v=$('#cam'); v.srcObject=this.stream;
+      await v.play();
+      $('#camPrev').style.display='block';
+      this.stream.getVideoTracks()[0].addEventListener('ended',()=>{ this.stop(); renderAmbBtns(); });
+      this.kind='screen'; S.mode='ambient'; this.loop();
+      return true;
+    }catch(e){
+      if(e.name!=='NotAllowedError') toast('Could not share the screen: '+(e.message||e),'bad');
+      return false;
+    }
+  },
+
+  stop(){
+    cancelAnimationFrame(this.raf);
+    try{ if(this.stream) this.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    this.stream=null; this.kind=null;
+    const v=$('#cam'); if(v) v.srcObject=null;
+    const p=$('#camPrev'); if(p) p.style.display='none';
+  },
+
+  loop(){
+    if(!this.stream) return;
+    this.raf=requestAnimationFrame(()=>this.loop());
+    const v=$('#cam'), cv=$('#amb');
+    if(!v||!v.videoWidth) return;
+    const g=cv.getContext('2d',{willReadFrequently:true});
+    const W=cv.width,H=cv.height;
+    g.drawImage(v,0,0,W,H);
+    let x0=0,y0=0,x1=W,y1=H;
+    if(S.amb.crop){ x0=W*0.2|0; x1=W*0.8|0; y0=H*0.2|0; y1=H*0.8|0; }
+    const px=g.getImageData(x0,y0,x1-x0,y1-y0).data;
+    let r=0,gg=0,b=0,n=0;
+    for(let i=0;i<px.length;i+=4){
+      const w=1+ (px[i]+px[i+1]+px[i+2])/255; // weight brighter pixels
+      r+=px[i]*w; gg+=px[i+1]*w; b+=px[i+2]*w; n+=w;
+    }
+    r/=n; gg/=n; b/=n;
+    let [h,s,val]=rgb2hsv(r,gg,b);
+    const punch=S.amb.punch/100;
+    s=clamp(s*(1+punch*1.9),0,1);
+    val=clamp(Math.pow(val,1-punch*0.35),0,1);
+    if(S.amb.live || this.kind==='screen') this.cur=hsv2rgb(h,s,Math.max(val,0.05));
+
+    // visible preview, only while the ambient pane is actually on screen
+    const pv=$('#camPrev');
+    if(pv && pv.style.display!=='none' && pv.offsetParent!==null){
+      const pg=pv.getContext('2d');
+      pg.drawImage(v,0,0,pv.width,pv.height);
+      if(S.amb.crop){
+        pg.strokeStyle='rgba(255,255,255,.75)'; pg.lineWidth=2;
+        pg.strokeRect(pv.width*0.2,pv.height*0.2,pv.width*0.6,pv.height*0.6);
+      }
+      const c=this.cur;
+      pg.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;
+      pg.fillRect(0,pv.height-14,pv.width,14);
+    }
+  },
+
+  pick(){
+    const c=this.cur;
+    const [h,s,v]=rgb2hsv(c[0],c[1],c[2]);
+    S.h=h; S.s=s; S.v=v; S.mode='static';
+    this.stop(); syncColourUI(); pushColour(true); renderAmbBtns(); renderMode();
+    toast('Colour taken from the camera.','good');
+  }
+};
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Rangi — interface
+   ============================================================ */
+
+/* ---------- colour wheel ---------- */
+const wheelCv=$('#wheel'), wctx=wheelCv.getContext('2d');
+function drawWheel(){
+  const W=wheelCv.width, R=W/2;
+  const img=wctx.createImageData(W,W), d=img.data;
+  for(let y=0;y<W;y++){
+    for(let x=0;x<W;x++){
+      const dx=x-R, dy=y-R, dist=Math.sqrt(dx*dx+dy*dy), i=(y*W+x)*4;
+      if(dist>R){ d[i+3]=0; continue; }
+      const h=(Math.atan2(dy,dx)*180/Math.PI+360+90)%360;
+      const s=clamp(dist/(R-2),0,1);
+      const [r,g,b]=hsv2rgb(h,s,1);
+      d[i]=r; d[i+1]=g; d[i+2]=b;
+      d[i+3]=dist>R-2 ? 255*(R-dist)/2 : 255;
+    }
+  }
+  wctx.putImageData(img,0,0);
+}
+function placeKnob(){
+  const wrap=$('#wheelWrap'), R=wrap.clientWidth/2;
+  const a=(S.h-90)*Math.PI/180, r=S.s*(R-3);
+  const k=$('#knob');
+  k.style.left=(R+Math.cos(a)*r)+'px';
+  k.style.top =(R+Math.sin(a)*r)+'px';
+  const [r0,g0,b0]=hsv2rgb(S.h,S.s,1);
+  k.style.background=`rgb(${r0},${g0},${b0})`;
+}
+function wheelPick(e){
+  const wrap=$('#wheelWrap'), b=wrap.getBoundingClientRect(), R=b.width/2;
+  const x=e.clientX-b.left-R, y=e.clientY-b.top-R;
+  S.h=(Math.atan2(y,x)*180/Math.PI+360+90)%360;
+  S.s=clamp(Math.sqrt(x*x+y*y)/(R-3),0,1);
+  if(S.mode==='cct'){ S.mode='static'; S.cct=null; }
+  syncColourUI(); pushColour(); renderMode();
+}
+(function(){
+  const wrap=$('#wheelWrap'); let down=false;
+  wrap.addEventListener('pointerdown',e=>{down=true;wrap.setPointerCapture(e.pointerId);wheelPick(e)});
+  wrap.addEventListener('pointermove',e=>{if(down)wheelPick(e)});
+  wrap.addEventListener('pointerup',()=>down=false);
+  wrap.addEventListener('pointercancel',()=>down=false);
+})();
+
+/* ---------- CCT bar ---------- */
+function cctPick(e){
+  const b=$('#cctBar').getBoundingClientRect();
+  const x=clamp((e.clientX-b.left)/b.width,0,1);
+  S.cct=Math.round(lerp(2000,9000,x));
+  S.mode='cct';
+  const [r,g,bb]=kelvin2rgb(S.cct);
+  const [h,s,v]=rgb2hsv(r,g,bb);
+  S.h=h; S.s=s; S.v=v;
+  syncColourUI(); pushColour(); renderMode();
+}
+(function(){
+  const bar=$('#cctBar'); let down=false;
+  bar.addEventListener('pointerdown',e=>{down=true;bar.setPointerCapture(e.pointerId);cctPick(e)});
+  bar.addEventListener('pointermove',e=>{if(down)cctPick(e)});
+  bar.addEventListener('pointerup',()=>down=false);
+})();
+
+/* ---------- live paint ---------- */
+function paintLive(rgb){
+  const hex=rgb2hex(rgb[0],rgb[1],rgb[2]);
+  document.documentElement.style.setProperty('--live',hex);
+  document.documentElement.style.setProperty('--live-soft',`rgba(${rgb[0]},${rgb[1]},${rgb[2]},.18)`);
+  const ms=$('#mSwatch'); if(ms) ms.style.background=hex;
+  const rr=$('#roRgb'); if(rr) rr.textContent=rgb.join(' ');
+}
+function paintStrip(){
+  const st=$('#simStrip'); if(!st) return;
+  const ts=targets();
+  const cells=st.children;
+  for(let i=0;i<cells.length;i++){
+    const d=ts.length?ts[Math.floor(i/cells.length*ts.length)]:null;
+    const c=d?d.cur:[12,13,16];
+    cells[i].style.background=S.power?`rgb(${c[0]},${c[1]},${c[2]})`:'#111318';
+  }
+}
+
+/* ---------- colour UI sync ---------- */
+function syncColourUI(){
+  const [r,g,b]=hsv2rgb(S.h,S.s,S.v);
+  const hex=rgb2hex(r,g,b);
+  $('#hubHex').textContent=hex;
+  $('#hubMeta').textContent=`${Math.round(S.h)}° ${Math.round(S.s*100)}% ${Math.round(S.v*100)}%`;
+  $('#hexIn').value=hex;
+  $('#sH').value=Math.round(S.h); $('#vH').textContent=Math.round(S.h)+'°';
+  $('#sS').value=Math.round(S.s*100); $('#vS').textContent=Math.round(S.s*100)+'%';
+  $('#sV').value=Math.round(S.v*100); $('#vV').textContent=Math.round(S.v*100)+'%';
+  const hu=hsv2rgb(S.h,1,1);
+  $('#sS').style.setProperty('--trk',`linear-gradient(90deg,#fff,rgb(${hu[0]},${hu[1]},${hu[2]}))`);
+  $('#sV').style.setProperty('--trk',`linear-gradient(90deg,#000,rgb(${hu[0]},${hu[1]},${hu[2]}))`);
+  $('#sH').style.setProperty('--trk','linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)');
+  $('#cctVal').textContent=S.cct?S.cct+' K':'—';
+  $('#cctKnob').style.left=S.cct?clamp((S.cct-2000)/7000,0,1)*100+'%':'50%';
+  placeKnob();
+  if(!DYNAMIC.has(S.mode)) paintLive(hsv2rgb(S.h,S.s,S.v*(S.bright/100)));
+}
+function renderMode(){
+  const m={static:'Static colour',cct:'White '+(S.cct||'')+' K',fx:'Effect · '+(S.fx?FX[S.fx].n:''),
+    music:'Music',ambient:'Ambient',diy:'Your effect'}[S.mode]||'Static colour';
+  $('#roMode').textContent=m;
+  $$('#fxTiles .tile').forEach(t=>t.classList.toggle('on',S.mode==='fx'&&t.dataset.k===S.fx));
+}
+
+/* ---------- devices ---------- */
+function renderDevices(){
+  const L=$('#devList'); L.innerHTML='';
+  if(!S.devices.length){
+    L.innerHTML='<div class="empty">No lights yet.<br>Pair one over Bluetooth, or add a simulated strip to look around.</div>';
+  }
+  S.devices.forEach(d=>{
+    const el=document.createElement('button');
+    el.className='devcard'+(d.uid===S.sel?' on':'')+(d.connected?' conn':'')+(d.kind==='sim'?' simu':'');
+    const c=d.cur;
+    el.innerHTML=`<div class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></div>
+      <div style="min-width:0"><div class="nm"></div><div class="sub"></div></div><div class="st"></div>`;
+    el.querySelector('.nm').textContent=d.name;
+    el.querySelector('.sub').textContent=
+      d.kind==='sim'?'simulated':
+      d._remembered?'tap to reconnect':
+      d.connected?PROTO[d.proto].label+(d.group?' · '+d.group:''):'not connected';
+    el.onclick=()=>{
+      if(d._remembered&&!d.connected){ reconnect(d); return; }
+      S.sel=d.uid; renderDevices(); renderMaster(); renderDevPane(); renderHw(); pushColour(true);
+      $('#rail').classList.remove('open');
+    };
+    L.appendChild(el);
+  });
+  // top chips
+  const T=$('#topDev'); T.innerHTML='';
+  S.devices.forEach(d=>{
+    const c=document.createElement('button');
+    c.className='chip'+(d.uid===S.sel?' on':'')+(d.connected&&d.kind!=='sim'?' live':'')+(d.kind==='sim'?' sim':'');
+    c.innerHTML='<i class="dot"></i>';
+    c.appendChild(document.createTextNode(d.name));
+    c.onclick=()=>{ if(d._remembered&&!d.connected){reconnect(d);return;} S.sel=d.uid; renderDevices(); renderMaster(); renderDevPane(); renderHw(); };
+    T.appendChild(c);
+  });
+  renderGroups(); paintStrip();
+}
+function renderMaster(){
+  const d=S.devices.find(x=>x.uid===S.sel);
+  const n=targets().length;
+  $('#mTarget').textContent = S.targetMode==='all' ? n+' light'+(n===1?'':'s')
+    : d ? d.name : 'No light';
+  $('#mProto').textContent = d ? (d.kind==='sim'?'simulated':PROTO[d.proto].label) : 'nothing paired';
+  $('#btnPower').classList.toggle('on',S.power);
+}
+function renderGroups(){
+  const G=$('#grpList'); G.innerHTML='';
+  const names=[...new Set(S.devices.map(d=>d.group).filter(Boolean))];
+  if(!names.length){ G.innerHTML='<div class="empty" style="padding:12px">No groups yet.</div>'; return; }
+  names.forEach(nm=>{
+    const members=S.devices.filter(d=>d.group===nm);
+    const el=document.createElement('button');
+    el.className='devcard';
+    el.innerHTML=`<div class="swatch" style="background:var(--live)"></div>
+      <div style="min-width:0"><div class="nm"></div><div class="sub"></div></div><div class="st" style="background:var(--live)"></div>`;
+    el.querySelector('.nm').textContent=nm;
+    el.querySelector('.sub').textContent=members.length+' light'+(members.length===1?'':'s');
+    el.onclick=()=>{ const f=members[0]; if(f){ S.sel=f.uid; renderDevices(); renderMaster(); } };
+    G.appendChild(el);
+  });
+}
+
+/* ---------- swatches ---------- */
+function renderSwatches(){
+  const w=$('#swatches'); w.innerHTML='';
+  S.swatches.forEach((hx,i)=>{
+    const b=document.createElement('button');
+    b.style.background=hx; b.title=hx;
+    b.onclick=()=>{ const c=hex2rgb(hx); if(!c)return;
+      const [h,s,v]=rgb2hsv(c[0],c[1],c[2]); S.h=h;S.s=s;S.v=v;S.mode='static';S.cct=null;
+      syncColourUI(); pushColour(true); renderMode(); };
+    b.oncontextmenu=e=>{ e.preventDefault(); S.swatches.splice(i,1); store.set('swatches',S.swatches); renderSwatches(); };
+    w.appendChild(b);
+  });
+}
+
+/* ---------- scenes ---------- */
+const SCENES=[
+  {n:'Candlelight', d:'Dinner, low',   t:'fx', k:'candle', sp:35, dp:85},
+  {n:'Fireplace',   d:'Deep and warm', t:'fx', k:'fire',   sp:45, dp:100},
+  {n:'Reading',     d:'Neutral 4000K', t:'cct',k:4000},
+  {n:'Focus',       d:'Daylight 5600K',t:'cct',k:5600},
+  {n:'Wind down',   d:'Warm 2200K',    t:'cct',k:2200},
+  {n:'Cinema',      d:'Dim blue wash', t:'col',k:'#1B3A6B', b:35},
+  {n:'Night light', d:'Barely there',  t:'col',k:'#FF3000', b:6},
+  {n:'Romance',     d:'Slow pink swell',t:'fx',k:'breathe', sp:28, dp:70, col:'#FF2D6F'},
+  {n:'Party',       d:'Hard jumps',    t:'fx', k:'jump',   sp:70, dp:100, pal:'neon'},
+  {n:'Gaming',      d:'Neon cycle',    t:'fx', k:'cycle',  sp:55, dp:100, pal:'neon'},
+  {n:'Rainbow',     d:'Endless hue',   t:'fx', k:'rainbow',sp:45, dp:100},
+  {n:'Ocean',       d:'Cold swell',    t:'fx', k:'ocean',  sp:30, dp:90},
+  {n:'Forest',      d:'Leaf shadows',  t:'fx', k:'forest', sp:35, dp:85},
+  {n:'Storm',       d:'Dark with cracks',t:'fx',k:'lightning',sp:50,dp:100},
+  {n:'Police',      d:'Red and blue',  t:'fx', k:'police', sp:60, dp:100},
+  {n:'Sunrise',     d:'Night to day',  t:'fx', k:'sunrise',sp:50, dp:100}
+];
+function sceneSwatch(sc){
+  if(sc.t==='col') return sc.k;
+  if(sc.t==='cct'){ const c=kelvin2rgb(sc.k); return rgb2hex(c[0],c[1],c[2]); }
+  return fxSwatch(sc.k, palOf(sc.pal||'neon'));
+}
+function applyScene(sc){
+  if(sc.col){ const c=hex2rgb(sc.col); const [h,s]=rgb2hsv(c[0],c[1],c[2]); S.h=h;S.s=s; }
+  if(sc.pal) S.music.pal=sc.pal;
+  if(sc.b!=null){ S.bright=sc.b; $('#sBright').value=sc.b; $('#brVal').textContent=sc.b+'%'; }
+  if(sc.t==='col'){
+    const c=hex2rgb(sc.k); const [h,s,v]=rgb2hsv(c[0],c[1],c[2]);
+    S.h=h;S.s=s;S.v=v;S.mode='static';S.cct=null;
+  } else if(sc.t==='cct'){
+    S.cct=sc.k; const c=kelvin2rgb(sc.k); const [h,s,v]=rgb2hsv(c[0],c[1],c[2]);
+    S.h=h;S.s=s;S.v=v;S.mode='cct';
+  } else {
+    S.fx=sc.k; S.mode='fx';
+    if(sc.sp!=null){ S.speed=sc.sp; $('#sSpeed').value=sc.sp; $('#vSpeed').textContent=sc.sp+'%'; }
+    if(sc.dp!=null){ S.depth=sc.dp; $('#sDepth').value=sc.dp; $('#vDepth').textContent=sc.dp+'%'; }
+    engStart=performance.now();
+  }
+  syncColourUI(); renderMode(); renderFx();
+  if(!DYNAMIC.has(S.mode)) pushColour(true);
+  toast(sc.n);
+}
+function renderScenes(){
+  const T=$('#sceneTiles'); T.innerHTML='';
+  SCENES.forEach(sc=>{
+    const el=document.createElement('button'); el.className='tile';
+    el.innerHTML=`<div class="bar" style="background:${sceneSwatch(sc)}"></div><div class="nm"></div><div class="sb"></div>`;
+    el.querySelector('.nm').textContent=sc.n;
+    el.querySelector('.sb').textContent=sc.d;
+    el.onclick=()=>applyScene(sc);
+    T.appendChild(el);
+  });
+  const M=$('#mySceneTiles'); M.innerHTML='';
+  $('#mySceneEmpty').style.display=S.myScenes.length?'none':'block';
+  S.myScenes.forEach((sc,i)=>{
+    const el=document.createElement('button'); el.className='tile';
+    el.innerHTML=`<div class="bar" style="background:${sceneSwatch(sc)}"></div><div class="nm"></div><div class="sb">hold to delete</div>`;
+    el.querySelector('.nm').textContent=sc.n;
+    el.onclick=()=>applyScene(sc);
+    let tm; el.onpointerdown=()=>{tm=setTimeout(()=>{S.myScenes.splice(i,1);store.set('myScenes',S.myScenes);renderScenes();toast('Removed.')},650)};
+    el.onpointerup=el.onpointerleave=()=>clearTimeout(tm);
+    M.appendChild(el);
+  });
+}
+
+/* ---------- effects ---------- */
+function renderFx(){
+  const T=$('#fxTiles'); T.innerHTML='';
+  FX_KEYS.forEach(k=>{
+    const el=document.createElement('button');
+    el.className='tile'+(S.mode==='fx'&&S.fx===k?' on':''); el.dataset.k=k;
+    el.innerHTML=`<div class="bar" style="background:${fxSwatch(k)}"></div><div class="nm"></div><div class="sb"></div>`;
+    el.querySelector('.nm').textContent=FX[k].n;
+    el.querySelector('.sb').textContent=FX[k].d;
+    el.onclick=()=>{
+      if(S.mode==='fx'&&S.fx===k){ S.mode='static'; S.fx=null; pushColour(true); }
+      else { S.fx=k; S.mode='fx'; engStart=performance.now(); }
+      renderFx(); renderMode();
+    };
+    T.appendChild(el);
+  });
+  renderDiy();
+}
+function renderHw(){
+  const T=$('#hwTiles'); T.innerHTML='';
+  const d=S.devices.find(x=>x.uid===S.sel);
+  if(!d){ T.innerHTML='<div class="empty">Pick a light first.</div>'; return; }
+  const p=PROTO[d.proto];
+  if(!p.fx||!p.fx.length){ T.innerHTML='<div class="empty">This controller has no built-in effects.</div>'; return; }
+  p.fx.forEach(([id,nm])=>{
+    const el=document.createElement('button'); el.className='tile';
+    el.innerHTML=`<div class="bar" style="background:linear-gradient(90deg,#444,#888)"></div><div class="nm"></div><div class="sb">on the chip</div>`;
+    el.querySelector('.nm').textContent=nm;
+    el.onclick=()=>{
+      S.mode='static';
+      targets().forEach(x=>devHwFx(x,id));
+      renderMode(); toast(nm+' — running on the controller');
+    };
+    T.appendChild(el);
+  });
+}
+function renderDiy(){
+  const L=$('#diyList'); L.innerHTML='';
+  if(!S.diys.length){ L.innerHTML='<div class="empty" style="padding:14px">Nothing built yet.</div>'; return; }
+  const g=document.createElement('div'); g.className='tiles';
+  S.diys.forEach(def=>{
+    const el=document.createElement('button'); el.className='tile'+(S.mode==='diy'&&S.diy===def.id?' on':'');
+    const stops=def.stops.map((s,i)=>s.c+' '+Math.round(i/(def.stops.length-1||1)*100)+'%').join(',');
+    el.innerHTML=`<div class="bar" style="background:linear-gradient(90deg,${stops})"></div><div class="nm"></div><div class="sb">tap to run · hold to edit</div>`;
+    el.querySelector('.nm').textContent=def.n;
+    el.onclick=()=>{ S.diy=def.id; S.mode='diy'; engStart=performance.now(); renderDiy(); renderMode(); };
+    let tm; el.onpointerdown=()=>{tm=setTimeout(()=>diyModal(def),600)};
+    el.onpointerup=el.onpointerleave=()=>clearTimeout(tm);
+    g.appendChild(el);
+  });
+  L.appendChild(g);
+}
+
+/* ---------- music UI ---------- */
+function renderMusic(){
+  const M=$('#musicModes'); M.innerHTML='';
+  [['spectrum','Spectrum','Hue follows the pitch'],
+   ['bass','Bass pump','Brightness rides the low end'],
+   ['beat','Beat jump','New colour on every hit'],
+   ['vu','Level meter','Green when quiet, red when loud'],
+   ['flash','Flash','Dark until the beat lands']].forEach(([k,n,d])=>{
+    const el=document.createElement('button'); el.className='tile'+(S.music.mode===k?' on':'');
+    el.innerHTML=`<div class="nm"></div><div class="sb"></div>`;
+    el.querySelector('.nm').textContent=n; el.querySelector('.sb').textContent=d;
+    el.onclick=()=>{S.music.mode=k;renderMusic()};
+    M.appendChild(el);
+  });
+  const P=$('#musicPal'); P.innerHTML='';
+  [['warm','Warm'],['neon','Neon'],['ocean','Ocean'],['forest','Forest'],['ice','Ice'],['mono','Your colour']].forEach(([k,n])=>{
+    const el=document.createElement('button'); el.className='tile'+(S.music.pal===k?' on':'');
+    const cols=palOf(k).map((c,i,a)=>rgb2hex(c[0],c[1],c[2])+' '+Math.round(i/Math.max(a.length-1,1)*100)+'%').join(',');
+    el.innerHTML=`<div class="bar" style="background:linear-gradient(90deg,${cols}${palOf(k).length===1?','+rgb2hex(...palOf(k)[0]):''})"></div><div class="nm"></div>`;
+    el.querySelector('.nm').textContent=n;
+    el.onclick=()=>{S.music.pal=k;renderMusic();renderFx()};
+    P.appendChild(el);
+  });
+}
+function renderAmbBtns(){
+  $('#btnCamStop').disabled=AMB.kind!=='cam';
+  $('#btnCamFlip').disabled=AMB.kind!=='cam';
+  $('#btnScreenStop').disabled=AMB.kind!=='screen';
+  $('#btnCam').textContent=AMB.kind==='cam'?'Take this colour':'Open the camera';
+}
+
+/* ---------- device pane ---------- */
+function renderDevPane(){
+  const P=$('#devPane');
+  const d=S.devices.find(x=>x.uid===S.sel);
+  if(!d){ P.innerHTML='<div class="empty">Pick a light to set it up.</div>'; return; }
+  const p=PROTO[d.proto];
+  P.innerHTML=`
+   <div class="grp">
+     <h4>Name</h4>
+     <input class="txt" id="dvName" value="">
+   </div>
+   <div class="grp">
+     <h4>Protocol</h4>
+     <select class="txt" id="dvProto">${PROTO_KEYS.map(k=>`<option value="${k}" ${k===d.proto?'selected':''}>${PROTO[k].label}</option>`).join('')}</select>
+     <p class="note">${p.hint}</p>
+     <div class="btnrow" style="margin-top:9px">
+       <button class="btn prim" id="dvProbe">Find the right one for me</button>
+       <button class="btn" id="dvTest">Flash red, green, blue</button>
+     </div>
+   </div>
+   ${d.proto==='bledom'?`
+   <div class="grp">
+     <h4>Frame bytes</h4>
+     <div class="row"><label>Variant</label>
+       <select class="txt" id="dvV" style="width:150px">
+         <option value="0" ${d.v===0?'selected':''}>0x00 — BLEDOM</option>
+         <option value="7" ${d.v===7?'selected':''}>0x07 — BLEDOB</option>
+         <option value="4" ${d.v===4?'selected':''}>0x04</option>
+       </select></div>
+     <div class="row"><label>Trailer</label>
+       <select class="txt" id="dvM" style="width:150px">
+         <option value="0" ${d.m===0?'selected':''}>0x00</option>
+         <option value="10" ${d.m===10?'selected':''}>0x0A</option>
+         <option value="16" ${d.m===16?'selected':''}>0x10</option>
+       </select></div>
+     <p class="note">If colour commands land but nothing changes, these two bytes are the usual culprit. Try each pair.</p>
+   </div>`:''}
+   <div class="grp">
+     <h4>Colour calibration</h4>
+     <div class="row"><label>Channel order</label>
+       <select class="txt" id="dvOrder" style="width:120px">
+         ${['RGB','RBG','GRB','GBR','BRG','BGR'].map(o=>`<option ${o===d.order?'selected':''}>${o}</option>`).join('')}
+       </select></div>
+     <p class="note" style="margin-top:0">Pick green on the wheel and get purple? Your strip wires its channels in a different order. Change this until the test below matches.</p>
+     <div class="row" style="margin-top:12px"><label>Gamma</label><span class="val num" id="vGam">${d.gamma.toFixed(2)}</span></div>
+     <input type="range" class="slide" id="dvGam" min="40" max="300" value="${Math.round(d.gamma*100)}">
+     <div class="row"><label>Red trim</label><span class="val num" id="vTr">${d.trim[0]}%</span></div>
+     <input type="range" class="slide" id="dvTr" min="0" max="100" value="${d.trim[0]}">
+     <div class="row"><label>Green trim</label><span class="val num" id="vTg">${d.trim[1]}%</span></div>
+     <input type="range" class="slide" id="dvTg" min="0" max="100" value="${d.trim[1]}">
+     <div class="row"><label>Blue trim</label><span class="val num" id="vTb">${d.trim[2]}%</span></div>
+     <input type="range" class="slide" id="dvTb" min="0" max="100" value="${d.trim[2]}">
+     <p class="note">Trim fixes a strip that reads too blue or too green on white. Set white on the wheel, then pull the loudest channel down.</p>
+   </div>
+   ${PROTO[d.proto].white?`
+   <div class="grp">
+     <h4>White channel</h4>
+     <div class="row"><label>Use it for whites</label>
+       <div class="toggle ${d.useW?'on':''}" id="dvW"><i></i></div></div>
+     <p class="note">This strip has dedicated white LEDs. On the white bar Rangi drives those instead of mixing red, green and blue, which looks cleaner and runs cooler. Turn it off if your strip has no white channel wired.</p>
+   </div>`:''}
+   <div class="grp">
+     <h4>Built-in effect speed</h4>
+     <input type="range" class="slide" id="dvSp" min="1" max="100" value="${d.sp}">
+   </div>
+   <div class="grp">
+     <h4>Group</h4>
+     <input class="txt" id="dvGrp" value="" placeholder="Living room">
+     <p class="note">Lights sharing a group name move together, and Chase spreads an effect along them.</p>
+   </div>
+   <div class="grp">
+     <div class="btnrow">
+       <button class="btn danger" id="dvForget">Remove this light</button>
+     </div>
+   </div>`;
+  $('#dvName').value=d.name;
+  $('#dvGrp').value=d.group||'';
+  $('#dvName').oninput=e=>{d.name=e.target.value||'Light';renderDevices();renderMaster()};
+  $('#dvGrp').oninput=e=>{d.group=e.target.value.trim()||null;renderDevices()};
+  $('#dvProto').onchange=async e=>{
+    const k=e.target.value;
+    if(d.kind==='sim'){ d.proto=k; renderDevPane(); renderHw(); return; }
+    try{ await bindProto(d,k); toast('Switched to '+PROTO[k].label,'good'); }
+    catch(err){ toast("This light doesn't expose that protocol's service.",'bad'); }
+    renderDevPane(); renderHw(); renderDevices();
+  };
+  $('#dvProbe').onclick=()=>probe(d);
+  $('#dvTest').onclick=()=>testRGB(d);
+  if($('#dvV')) $('#dvV').onchange=e=>{d.v=+e.target.value;pushColour(true)};
+  if($('#dvM')) $('#dvM').onchange=e=>{d.m=+e.target.value;pushColour(true)};
+  $('#dvOrder').onchange=e=>{d.order=e.target.value;pushColour(true)};
+  $('#dvGam').oninput=e=>{d.gamma=e.target.value/100;$('#vGam').textContent=d.gamma.toFixed(2);pushColour(true)};
+  [['dvTr',0,'vTr'],['dvTg',1,'vTg'],['dvTb',2,'vTb']].forEach(([id,i,lab])=>{
+    $('#'+id).oninput=e=>{d.trim[i]=+e.target.value;$('#'+lab).textContent=e.target.value+'%';pushColour(true)};
+  });
+  if($('#dvW')) $('#dvW').onclick=function(){this.classList.toggle('on');d.useW=this.classList.contains('on');pushColour(true)};
+  $('#dvSp').oninput=e=>d.sp=+e.target.value;
+  $('#dvForget').onclick=()=>{
+    try{ if(d.gatt&&d.gatt.connected) d.gatt.disconnect(); }catch(e){}
+    S.devices=S.devices.filter(x=>x.uid!==d.uid);
+    S.sel=S.devices[0]?S.devices[0].uid:null;
+    renderDevices(); renderMaster(); renderDevPane(); toast('Removed.');
+  };
+}
+
+async function testRGB(d){
+  const seq=[[255,0,0],[0,255,0],[0,0,255],[255,255,255]];
+  for(const c of seq){ devColour(d,c[0],c[1],c[2]); await new Promise(r=>setTimeout(r,520)); }
+  pushColour(true);
+  toast('Red, green, blue, white. Did they match?');
+}
+
+/* step through protocols until one visibly works */
+async function probe(d){
+  if(d.kind==='sim'){ toast('Nothing to probe on a simulated strip.'); return; }
+  const tried=[];
+  for(const k of PROTO_KEYS){
+    try{ await bindProto(d,k); }catch(e){ continue; }
+    tried.push(k);
+    devPower(d,true);
+    await new Promise(r=>setTimeout(r,80));
+    devColour(d,0,255,0);
+    const ok=await ask(PROTO[k].label,
+      'Rangi just sent a green command on this protocol. Did the light turn green?',
+      'Yes, that is it','No, try the next');
+    if(ok){ d.proto=k; renderDevPane(); renderDevices(); renderHw(); pushColour(true);
+      toast('Locked to '+PROTO[k].label,'good'); return; }
+  }
+  toast(tried.length?'None of the known protocols took. Open an issue with the light’s name.':'No matching services on this light.','bad');
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+const scrim=$('#scrim'), modal=$('#modal');
+function closeModal(){ scrim.classList.remove('on'); modal.innerHTML=''; }
+scrim.addEventListener('click',e=>{ if(e.target===scrim) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+function ask(title,body,yes,no){
+  return new Promise(res=>{
+    modal.innerHTML=`<h2></h2><p class="lead"></p>
+      <div class="modalfoot"><button class="btn ghost" id="mNo"></button><button class="btn prim" id="mYes"></button></div>`;
+    modal.querySelector('h2').textContent=title;
+    modal.querySelector('.lead').textContent=body;
+    $('#mYes').textContent=yes; $('#mNo').textContent=no;
+    $('#mYes').onclick=()=>{closeModal();res(true)};
+    $('#mNo').onclick=()=>{closeModal();res(false)};
+    scrim.classList.add('on');
+  });
+}
+
+function bleHelp(){
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||
+            (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  modal.innerHTML=`<h2>This browser can't reach Bluetooth</h2>
+    <p class="lead">Rangi talks to lights with Web Bluetooth. It works in Chrome and Edge on Android, Windows, macOS and Linux${ios?', but Safari on iPhone and iPad does not support it at all':''}.</p>
+    ${ios?`<div class="opt"><div class="t">On iPhone or iPad</div><div class="d">Open this page in <b>Bluefy</b> or <b>WebBLE</b> from the App Store. Both are browsers built around Web Bluetooth, and Rangi runs in them with everything working.</div></div>`:''}
+    <div class="opt"><div class="t">On Android</div><div class="d">Use Chrome. Turn on Bluetooth and location — Android requires location permission before any app may scan.</div></div>
+    <div class="opt"><div class="t">On a computer</div><div class="d">Chrome or Edge. On Linux, Bluetooth needs to be running under BlueZ.</div></div>
+    <div class="opt"><div class="t">No hardware to hand</div><div class="d">Add a simulated strip and everything else in Rangi works — effects, music, scenes, the lot.</div></div>
+    <div class="modalfoot"><button class="btn prim" id="mOk">Got it</button></div>`;
+  $('#mOk').onclick=closeModal; scrim.classList.add('on');
+}
+
+function groupModal(){
+  modal.innerHTML=`<h2>New group</h2>
+    <p class="lead">Give the group a name, then tick the lights that belong to it.</p>
+    <input class="txt" id="gName" placeholder="Living room">
+    <div style="margin-top:14px" id="gList"></div>
+    <div class="modalfoot"><button class="btn ghost" id="gCancel">Cancel</button><button class="btn prim" id="gSave">Create group</button></div>`;
+  const L=$('#gList'); const picked=new Set();
+  if(!S.devices.length) L.innerHTML='<div class="empty">No lights to group yet.</div>';
+  S.devices.forEach(d=>{
+    const b=document.createElement('button'); b.className='opt';
+    b.innerHTML=`<div class="t"></div><div class="d"></div>`;
+    b.querySelector('.t').textContent=d.name;
+    b.querySelector('.d').textContent=d.group?('currently in '+d.group):'not grouped';
+    b.onclick=()=>{ picked.has(d.uid)?picked.delete(d.uid):picked.add(d.uid); b.classList.toggle('on'); };
+    L.appendChild(b);
+  });
+  $('#gCancel').onclick=closeModal;
+  $('#gSave').onclick=()=>{
+    const nm=$('#gName').value.trim();
+    if(!nm){ toast('The group needs a name.','bad'); return; }
+    S.devices.forEach(d=>{ if(picked.has(d.uid)) d.group=nm; });
+    closeModal(); renderDevices(); renderDevPane(); toast('Group “'+nm+'” created.','good');
+  };
+  scrim.classList.add('on');
+}
+
+function diyModal(edit){
+  const def=edit?JSON.parse(JSON.stringify(edit)):
+    {id:'x'+Date.now(),n:'My effect',mode:'fade',speed:1,
+     stops:[{c:'#FF0040',ms:800},{c:'#FFB000',ms:800},{c:'#00C2FF',ms:800}]};
+  function paint(){
+    const prev=$('#dPrev');
+    if(prev) prev.style.background='linear-gradient(90deg,'+
+      def.stops.map((s,i)=>s.c+' '+Math.round(i/Math.max(def.stops.length-1,1)*100)+'%').join(',')+')';
+    const L=$('#dStops'); L.innerHTML='';
+    def.stops.forEach((s,i)=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:grid;grid-template-columns:46px 1fr auto auto;gap:9px;align-items:center;margin-bottom:8px';
+      row.innerHTML=`<input type="color" value="${s.c}" style="width:46px;height:38px;border:0;background:none;border-radius:8px;cursor:pointer">
+        <input type="range" min="80" max="4000" step="20" value="${s.ms}" class="slide" style="margin:0">
+        <span class="val num" style="min-width:58px">${(s.ms/1000).toFixed(2)}s</span>
+        <button class="btn ghost" style="padding:7px 10px">Remove</button>`;
+      const [col,rng,lab,del]=row.children;
+      col.oninput=e=>{s.c=e.target.value;paint()};
+      rng.oninput=e=>{s.ms=+e.target.value;lab.textContent=(s.ms/1000).toFixed(2)+'s';paint()};
+      del.onclick=()=>{ if(def.stops.length<=2){toast('Keep at least two colours.','bad');return;} def.stops.splice(i,1);paint(); };
+      L.appendChild(row);
+    });
+  }
+  modal.innerHTML=`<h2>Effect builder</h2>
+    <p class="lead">Lay out the colours and how long each one holds. Rangi plays it back frame by frame, so it runs on any light whatever its chip can do on its own.</p>
+    <input class="txt" id="dName" value="" style="margin-bottom:12px">
+    <div id="dPrev" style="height:46px;border-radius:12px;margin-bottom:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)"></div>
+    <div id="dStops"></div>
+    <div class="btnrow" style="margin:12px 0 18px"><button class="btn" id="dAdd">Add a colour</button></div>
+    <div class="row"><label>Between colours</label>
+      <div class="seg" style="width:200px"><button id="dFade">Fade</button><button id="dJump">Jump</button></div></div>
+    <div class="row"><label>Playback speed</label><span class="val num" id="dSpV">1.0×</span></div>
+    <input type="range" class="slide" id="dSp" min="20" max="400" value="${Math.round(def.speed*100)}">
+    <div class="modalfoot">
+      ${edit?'<button class="btn danger" id="dDel">Delete</button>':''}
+      <button class="btn ghost" id="dCancel">Cancel</button>
+      <button class="btn prim" id="dSave">Save effect</button></div>`;
+  $('#dName').value=def.n;
+  paint();
+  const setMode=m=>{def.mode=m;$('#dFade').classList.toggle('on',m==='fade');$('#dJump').classList.toggle('on',m==='jump')};
+  setMode(def.mode);
+  $('#dFade').onclick=()=>setMode('fade');
+  $('#dJump').onclick=()=>setMode('jump');
+  $('#dSpV').textContent=def.speed.toFixed(1)+'×';
+  $('#dSp').oninput=e=>{def.speed=e.target.value/100;$('#dSpV').textContent=def.speed.toFixed(1)+'×'};
+  $('#dAdd').onclick=()=>{ def.stops.push({c:rgb2hex(...hsv2rgb(Math.random()*360,.9,1)),ms:800}); paint(); };
+  $('#dCancel').onclick=closeModal;
+  if(edit) $('#dDel').onclick=()=>{ S.diys=S.diys.filter(x=>x.id!==def.id); store.set('diys',S.diys);
+    if(S.diy===def.id){S.diy=null;S.mode='static';pushColour(true)} closeModal(); renderDiy(); renderMode(); toast('Deleted.'); };
+  $('#dSave').onclick=()=>{
+    def.n=$('#dName').value.trim()||'My effect';
+    const i=S.diys.findIndex(x=>x.id===def.id);
+    if(i>=0) S.diys[i]=def; else S.diys.push(def);
+    store.set('diys',S.diys);
+    S.diy=def.id; S.mode='diy'; engStart=performance.now();
+    closeModal(); renderDiy(); renderMode(); toast('Saved — now playing.','good');
+  };
+  scrim.classList.add('on');
+}
+
+function schedModal(){
+  modal.innerHTML=`<h2>Add a scheduled time</h2>
+    <p class="lead">Rangi checks the clock every minute while it's open on this device.</p>
+    <div class="row"><label>Time</label><input type="time" class="txt" id="scT" value="19:00" style="width:140px"></div>
+    <div class="row"><label>Do this</label>
+      <select class="txt" id="scA" style="width:190px">
+        <option value="on">Switch on</option>
+        <option value="off">Switch off</option>
+        ${SCENES.map((s,i)=>`<option value="s${i}">Set “${s.n}”</option>`).join('')}
+      </select></div>
+    <div class="row"><label>Days</label></div>
+    <div class="seg" id="scD">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>`<button data-d="${i}" class="on">${d}</button>`).join('')}</div>
+    <div class="modalfoot"><button class="btn ghost" id="scC">Cancel</button><button class="btn prim" id="scS">Add</button></div>`;
+  $$('#scD button').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+  $('#scC').onclick=closeModal;
+  $('#scS').onclick=()=>{
+    const days=$$('#scD button').filter(b=>b.classList.contains('on')).map(b=>+b.dataset.d);
+    if(!days.length){ toast('Pick at least one day.','bad'); return; }
+    S.sched.push({id:'s'+Date.now(),t:$('#scT').value,a:$('#scA').value,days});
+    store.set('sched',S.sched); closeModal(); renderSched(); toast('Scheduled.','good');
+  };
+  scrim.classList.add('on');
+}
+function renderSched(){
+  const L=$('#schedList'); L.innerHTML='';
+  if(!S.sched.length){ L.innerHTML='<div class="empty" style="padding:14px">Nothing scheduled.</div>'; return; }
+  const DN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  S.sched.forEach(s=>{
+    const el=document.createElement('div'); el.className='devcard'; el.style.cursor='default';
+    const lab=s.a==='on'?'Switch on':s.a==='off'?'Switch off':'Set “'+(SCENES[+s.a.slice(1)]||{}).n+'”';
+    el.innerHTML=`<div class="swatch" style="background:var(--raise)"></div>
+      <div style="min-width:0"><div class="nm"></div><div class="sub"></div></div>
+      <button class="btn ghost" style="padding:6px 9px">Remove</button>`;
+    el.querySelector('.nm').textContent=s.t+' · '+lab;
+    el.querySelector('.sub').textContent=s.days.map(d=>DN[d]).join(' ');
+    el.querySelector('button').onclick=()=>{S.sched=S.sched.filter(x=>x.id!==s.id);store.set('sched',S.sched);renderSched()};
+    L.appendChild(el);
+  });
+}
+
+function settingsModal(){
+  const cfg={swatches:S.swatches,myScenes:S.myScenes,diys:S.diys,sched:S.sched,
+    lights:S.devices.filter(d=>d.kind!=='sim').map(d=>({name:d.name,proto:d.proto,v:d.v,m:d.m,
+      order:d.order,gamma:d.gamma,trim:d.trim,group:d.group}))};
+  modal.innerHTML=`<h2>Rangi</h2>
+    <p class="lead">A universal colour controller. Everything runs on this device — no account, no ads, nothing sent anywhere.</p>
+    <div class="opt"><div class="t">Bluetooth</div><div class="d">${BLE_OK?'Available in this browser.':'Not available in this browser.'}</div></div>
+    <div class="opt"><div class="t">Protocols</div><div class="d">${PROTO_KEYS.map(k=>PROTO[k].label).join(' · ')}</div></div>
+    <div class="grp" style="margin-top:18px">
+      <h4>Your setup</h4>
+      <textarea class="txt num" id="cfgBox" rows="5" spellcheck="false" style="font-size:11px"></textarea>
+      <div class="btnrow" style="margin-top:9px">
+        <button class="btn" id="cfgCopy">Copy setup</button>
+        <button class="btn" id="cfgPaste">Load from the box</button>
+        <button class="btn danger" id="cfgWipe">Reset everything</button>
+      </div>
+      <p class="note">Copy this to move your scenes, effects and calibration to another phone.</p>
+    </div>
+    <div class="modalfoot"><button class="btn prim" id="stOk">Close</button></div>`;
+  $('#cfgBox').value=JSON.stringify(cfg);
+  $('#cfgCopy').onclick=async()=>{
+    try{ await navigator.clipboard.writeText($('#cfgBox').value); toast('Copied.','good'); }
+    catch(e){ $('#cfgBox').select(); toast('Select the text and copy it.'); }
+  };
+  $('#cfgPaste').onclick=()=>{
+    try{
+      const o=JSON.parse($('#cfgBox').value);
+      if(o.swatches){S.swatches=o.swatches;store.set('swatches',S.swatches)}
+      if(o.myScenes){S.myScenes=o.myScenes;store.set('myScenes',S.myScenes)}
+      if(o.diys){S.diys=o.diys;store.set('diys',S.diys)}
+      if(o.sched){S.sched=o.sched;store.set('sched',S.sched)}
+      closeModal(); renderSwatches(); renderScenes(); renderDiy(); renderSched();
+      toast('Setup loaded.','good');
+    }catch(e){ toast("That doesn't look like a Rangi setup.",'bad'); }
+  };
+  $('#cfgWipe').onclick=async()=>{
+    if(await ask('Reset everything?','Saved colours, scenes, effects and schedules will be deleted from this device.','Delete it all','Keep it')){
+      ['swatches','myScenes','diys','sched'].forEach(k=>store.set(k,[]));
+      location.reload();
+    }
+  };
+  $('#stOk').onclick=closeModal;
+  scrim.classList.add('on');
+}
+
+/* ============================================================
+   TIMERS
+   ============================================================ */
+let sleepTimer=null, countTimer=null, countEnd=0, wakeFiredOn='';
+function startSleep(){
+  const mins=+$('#sSleepDur').value, t0=Date.now(), ms=mins*60000;
+  const h0=S.h, s0=S.s;
+  clearInterval(sleepTimer);
+  S.mode='static';
+  sleepTimer=setInterval(()=>{
+    const x=clamp((Date.now()-t0)/ms,0,1);
+    S.bright=Math.max(1,Math.round(100*(1-x)));
+    S.h=lerp(h0,22,x); S.s=lerp(s0,1,x);
+    $('#sBright').value=S.bright; $('#brVal').textContent=S.bright+'%';
+    syncColourUI(); pushColour(true);
+    if(x>=1){ clearInterval(sleepTimer); sleepTimer=null; setPower(false);
+      $('#btnSleepStop').disabled=true; $('#sleepNote').textContent='Wound down and switched off.'; }
+  },1000);
+  $('#btnSleepStop').disabled=false;
+  $('#sleepNote').textContent='Winding down over '+mins+' minutes.';
+}
+function renderCount(){
+  const R=$('#countRow'); R.innerHTML='';
+  [15,30,45,60,90].forEach(m=>{
+    const b=document.createElement('button'); b.className='btn'; b.textContent=m+' min';
+    b.onclick=()=>{ countEnd=Date.now()+m*60000; clearInterval(countTimer);
+      countTimer=setInterval(()=>{
+        const left=countEnd-Date.now();
+        if(left<=0){ clearInterval(countTimer); setPower(false); $('#countNote').textContent='Switched off.'; return; }
+        $('#countNote').textContent=Math.ceil(left/60000)+' minutes left.';
+      },1000); toast('Switching off in '+m+' minutes.'); };
+    R.appendChild(b);
+  });
+  const c=document.createElement('button'); c.className='btn ghost'; c.textContent='Cancel';
+  c.onclick=()=>{clearInterval(countTimer);$('#countNote').textContent='Nothing counting down.'};
+  R.appendChild(c);
+}
+setInterval(()=>{
+  const now=new Date();
+  const hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const dow=(now.getDay()+6)%7;
+  S.sched.forEach(s=>{
+    if(s.t===hhmm && s.days.includes(dow) && s._last!==hhmm+now.getDate()){
+      s._last=hhmm+now.getDate();
+      if(s.a==='on') setPower(true);
+      else if(s.a==='off') setPower(false);
+      else { setPower(true); applyScene(SCENES[+s.a.slice(1)]); }
+    }
+  });
+  // wake light
+  if($('#tgWake').classList.contains('on')){
+    const dur=+$('#sWakeDur').value;
+    const [wh,wm]=$('#wakeTime').value.split(':').map(Number);
+    const target=new Date(now); target.setHours(wh,wm,0,0);
+    const start=new Date(target.getTime()-dur*60000);
+    if(now>=start&&now<=target){
+      const x=clamp((now-start)/(target-start),0,1);
+      const k=kelvin2rgb(lerp(1700,5200,Math.pow(x,0.75)));
+      const [h,s,v]=rgb2hsv(k[0],k[1],k[2]);
+      S.h=h;S.s=s;S.v=v;S.mode='static';S.bright=Math.max(2,Math.round(Math.pow(x,1.5)*100));
+      if(!S.power) setPower(true);
+      $('#sBright').value=S.bright;$('#brVal').textContent=S.bright+'%';
+      syncColourUI(); pushColour(true);
+      wakeFiredOn=hhmm;
+    }
+  }
+},1000);
+
+/* ============================================================
+   WIRING
+   ============================================================ */
+function setPower(on){
+  S.power=on;
+  $('#btnPower').classList.toggle('on',on);
+  targets().forEach(d=>devPower(d,on));
+  if(on) pushColour(true); else { targets().forEach(d=>d.cur=[0,0,0]); paintStrip(); }
+}
+$('#btnPower').onclick=()=>setPower(!S.power);
+
+$('#sBright').oninput=e=>{
+  S.bright=+e.target.value; $('#brVal').textContent=S.bright+'%';
+  if(!DYNAMIC.has(S.mode)) pushColour();
+};
+$('#sH').oninput=e=>{S.h=+e.target.value;S.mode=S.mode==='cct'?'static':S.mode;S.cct=null;syncColourUI();pushColour();renderMode()};
+$('#sS').oninput=e=>{S.s=e.target.value/100;S.cct=null;syncColourUI();pushColour()};
+$('#sV').oninput=e=>{S.v=e.target.value/100;S.cct=null;syncColourUI();pushColour()};
+$('#hexIn').onchange=e=>{
+  const c=hex2rgb(e.target.value);
+  if(!c){ toast('That is not a hex colour.','bad'); syncColourUI(); return; }
+  const [h,s,v]=rgb2hsv(c[0],c[1],c[2]); S.h=h;S.s=s;S.v=v;S.mode='static';S.cct=null;
+  syncColourUI(); pushColour(true); renderMode();
+};
+$('#btnRand').onclick=()=>{
+  S.h=Math.random()*360; S.s=0.7+Math.random()*0.3; S.v=1; S.mode='static'; S.cct=null;
+  syncColourUI(); pushColour(true); renderMode();
+};
+$('#btnSaveSw').onclick=()=>{
+  const hx=rgb2hex(...hsv2rgb(S.h,S.s,S.v));
+  if(!S.swatches.includes(hx)) S.swatches.unshift(hx);
+  S.swatches=S.swatches.slice(0,24); store.set('swatches',S.swatches); renderSwatches(); toast('Saved.','good');
+};
+$('#btnClearSw').onclick=()=>{S.swatches=[];store.set('swatches',[]);renderSwatches()};
+
+$('#sSpeed').oninput=e=>{S.speed=+e.target.value;$('#vSpeed').textContent=S.speed+'%'};
+$('#sDepth').oninput=e=>{S.depth=+e.target.value;$('#vDepth').textContent=S.depth+'%'};
+$('#sFps').oninput=e=>{S.fps=+e.target.value;$('#vFps').textContent=S.fps+'/s'};
+$$('#spreadSeg button').forEach(b=>b.onclick=()=>{
+  S.spread=b.dataset.s; $$('#spreadSeg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+$$('#targetSeg button').forEach(b=>b.onclick=()=>{
+  S.targetMode=b.dataset.t; $$('#targetSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  renderMaster(); pushColour(true);
+});
+
+$('#btnScan').onclick=pair; $('#btnScanTop').onclick=pair;
+$('#btnSim').onclick=addSim;
+$('#btnGroup').onclick=groupModal;
+$('#btnSettings').onclick=settingsModal;
+$('#btnDiy').onclick=()=>diyModal(null);
+$('#btnSched').onclick=schedModal;
+$('#btnSleep').onclick=startSleep;
+$('#btnSleepStop').onclick=()=>{clearInterval(sleepTimer);sleepTimer=null;$('#btnSleepStop').disabled=true;$('#sleepNote').textContent='Cancelled.'};
+$('#sSleepDur').oninput=e=>$('#vSleepDur').textContent=e.target.value+' min';
+$('#sWakeDur').oninput=e=>$('#vWakeDur').textContent=e.target.value+' min';
+$('#tgWake').onclick=function(){this.classList.toggle('on');
+  toast(this.classList.contains('on')?'Wake light armed. Leave Rangi open overnight.':'Wake light off.')};
+
+$('#btnSaveScene').onclick=()=>{
+  const sc = S.mode==='fx'&&S.fx ? {n:FX[S.fx].n+' mix',d:'yours',t:'fx',k:S.fx,sp:S.speed,dp:S.depth,pal:S.music.pal,col:rgb2hex(...hsv2rgb(S.h,S.s,1))}
+    : S.mode==='cct'&&S.cct ? {n:S.cct+'K white',d:'yours',t:'cct',k:S.cct}
+    : {n:rgb2hex(...hsv2rgb(S.h,S.s,S.v)),d:'yours',t:'col',k:rgb2hex(...hsv2rgb(S.h,S.s,S.v)),b:S.bright};
+  S.myScenes.unshift(sc); store.set('myScenes',S.myScenes); renderScenes(); toast('Saved to your scenes.','good');
+};
+
+/* music */
+$$('#srcSeg button').forEach(b=>b.onclick=()=>{
+  S.music.src=b.dataset.s; $$('#srcSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#audioIn').style.display=S.music.src==='file'?'block':'none';
+  $('#audioEl').style.display=S.music.src==='file'?'block':'none';
+  $('#musicNote').textContent={
+    mic:'The microphone hears the room, so it works with any speaker — a car stereo, a PA, a TV.',
+    file:'Pick a track from this device. It plays here and the lights follow it exactly, with no room noise.',
+    tab:'Share a browser tab or your whole screen with audio on, and the lights follow what is playing.'}[S.music.src];
+});
+$('#audioIn').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  $('#audioEl').src=URL.createObjectURL(f);
+  toast('Loaded '+f.name);
+};
+$('#btnMusic').onclick=async()=>{
+  const ok=await MUSIC.start();
+  if(ok){ $('#btnMusic').disabled=true; $('#btnMusicStop').disabled=false; renderMode(); toast('Listening.','good'); }
+};
+$('#btnMusicStop').onclick=()=>{
+  MUSIC.stop(); S.mode='static'; pushColour(true);
+  $('#btnMusic').disabled=false; $('#btnMusicStop').disabled=true; renderMode();
+};
+$('#sSens').oninput=e=>{S.music.sens=+e.target.value;$('#vSens').textContent=e.target.value+'%'};
+$('#sSmooth').oninput=e=>{S.music.smooth=+e.target.value;$('#vSmooth').textContent=e.target.value+'%'};
+
+/* ambient */
+$('#btnCam').onclick=async()=>{
+  if(AMB.kind==='cam'){ AMB.pick(); return; }
+  if(await AMB.cam()){ renderAmbBtns(); renderMode(); }
+};
+$('#btnCamStop').onclick=()=>{AMB.stop();S.mode='static';pushColour(true);renderAmbBtns();renderMode()};
+$('#btnCamFlip').onclick=async()=>{AMB.facing=AMB.facing==='user'?'environment':'user';await AMB.cam();renderAmbBtns()};
+$('#btnScreen').onclick=async()=>{ if(await AMB.screen()){renderAmbBtns();renderMode();toast('Following the screen.','good')} };
+$('#btnScreenStop').onclick=()=>{AMB.stop();S.mode='static';pushColour(true);renderAmbBtns();renderMode()};
+$('#tgCamLive').onclick=function(){this.classList.toggle('on');S.amb.live=this.classList.contains('on')};
+$('#tgCrop').onclick=function(){this.classList.toggle('on');S.amb.crop=this.classList.contains('on')};
+$('#sPunch').oninput=e=>{S.amb.punch=+e.target.value;$('#vPunch').textContent=e.target.value+'%'};
+
+/* image palette */
+$('#imgIn').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas'); c.width=72; c.height=72;
+    const g=c.getContext('2d',{willReadFrequently:true});
+    g.drawImage(img,0,0,72,72);
+    const px=g.getImageData(0,0,72,72).data;
+    const buckets={};
+    for(let i=0;i<px.length;i+=4){
+      const [h,s,v]=rgb2hsv(px[i],px[i+1],px[i+2]);
+      if(v<0.12) continue;
+      const key=Math.round(h/18)+'|'+Math.round(s*3);
+      const b=buckets[key]||(buckets[key]={n:0,h:0,s:0,v:0});
+      b.n++; b.h+=h; b.s+=s; b.v+=v;
+    }
+    const top=Object.values(buckets).sort((a,b)=>b.n-a.n).slice(0,12);
+    const P=$('#imgPal'); P.innerHTML='';
+    top.forEach(b=>{
+      const hx=rgb2hex(...hsv2rgb(b.h/b.n,clamp(b.s/b.n*1.12,0,1),Math.max(b.v/b.n,0.55)));
+      const btn=document.createElement('button'); btn.style.background=hx; btn.title=hx;
+      btn.onclick=()=>{
+        const c2=hex2rgb(hx); const [h,s,v]=rgb2hsv(c2[0],c2[1],c2[2]);
+        S.h=h;S.s=s;S.v=v;S.mode='static';S.cct=null;
+        syncColourUI(); pushColour(true); renderMode();
+      };
+      P.appendChild(btn);
+    });
+    URL.revokeObjectURL(img.src);
+    toast(top.length+' colours pulled out.','good');
+  };
+  img.src=URL.createObjectURL(f);
+};
+
+/* tabs */
+$$('#tabs .tab').forEach(t=>t.onclick=()=>{
+  $$('#tabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  $$('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===t.dataset.p));
+  if(t.dataset.p==='device'){ renderDevPane(); }
+  if(t.dataset.p==='effects'){ renderHw(); }
+});
+$$('#mobnav .tab').forEach(t=>t.onclick=()=>{
+  $$('#mobnav .tab').forEach(x=>x.classList.toggle('on',x===t));
+  const m=t.dataset.m;
+  if(m==='stage'){ $('#app').classList.remove('showpanel'); return; }
+  $('#app').classList.add('showpanel');
+  $$('#tabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.p===m));
+  $$('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===m));
+  if(m==='device') renderDevPane();
+  if(m==='effects') renderHw();
+});
+$('#btnRail').onclick=()=>{$('#rail').classList.toggle('open');$('#btnRailClose').style.display='grid'};
+$('#btnRailClose').onclick=()=>$('#rail').classList.remove('open');
+
+/* keyboard */
+document.addEventListener('keydown',e=>{
+  if(/input|textarea|select/i.test(e.target.tagName)) return;
+  if(e.key===' '){ e.preventDefault(); setPower(!S.power); }
+  if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+    e.preventDefault();
+    S.bright=clamp(S.bright+(e.key==='ArrowUp'?5:-5),1,100);
+    $('#sBright').value=S.bright; $('#brVal').textContent=S.bright+'%';
+    if(!DYNAMIC.has(S.mode)) pushColour();
+  }
+});
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function boot(){
+  // sim strip cells
+  const st=$('#simStrip');
+  for(let i=0;i<34;i++) st.appendChild(document.createElement('i'));
+
+  drawWheel();
+  if(!S.devices.length) addSim();
+  renderSwatches(); renderScenes(); renderFx(); renderMusic();
+  renderSched(); renderCount(); renderDevices(); renderMaster();
+  renderDevPane(); renderHw(); renderAmbBtns();
+  syncColourUI(); renderMode(); paintStrip();
+
+  if(!BLE_OK){
+    const ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
+    const framed=window.self!==window.top;
+    $('#banner').classList.add('on');
+    $('#bannerTxt').innerHTML= framed
+      ? "<b>You're looking at a preview.</b> Previews can't reach Bluetooth, the microphone or the camera. Put this page on your own address and all three come alive — the simulated strip below works either way."
+      : ios
+      ? "<b>Safari can't talk to Bluetooth.</b> Open Rangi in Bluefy or WebBLE to control real lights. Everything else works here."
+      : "<b>This browser can't talk to Bluetooth.</b> Use Chrome or Edge to control real lights. Everything else works here.";
+    $('#bannerAct').onclick=bleHelp;
+  } else {
+    restorePaired();
+  }
+
+  window.addEventListener('resize',()=>{placeKnob()});
+  requestAnimationFrame(tick);
+}
+boot();
+</script>
+</body>
+</html>
